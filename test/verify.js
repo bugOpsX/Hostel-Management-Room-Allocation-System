@@ -127,29 +127,30 @@ async function runTests() {
 
     // 12. Test Bulk Room Allocation Engine (FR-22, FR-23, FR-26)
     // Create 3 unallocated students (2 Boys, 1 Girl)
+    const bulkTs = Date.now();
     const bulkMale1 = db.prepare(`
-        INSERT INTO users (email, password_hash, role, status) VALUES ('bulk.m1@test.com', 'hash', 'student', 'active')
-    `).run();
+        INSERT INTO users (email, password_hash, role, status) VALUES (?, 'hash', 'student', 'active')
+    `).run(`bulk.m1.${bulkTs}@test.com`);
     db.prepare(`
         INSERT INTO students (user_id, enrollment_no, full_name, gender, department, year_of_study, mobile, guardian_contact)
-        VALUES (?, 'BULK-M1', 'Bulk Student 1', 'Male', 'CS', 2, '9991112221', '9991112222')
-    `).run(bulkMale1.lastInsertRowid);
+        VALUES (?, ?, 'Bulk Student 1', 'Male', 'CS', 2, '9991112221', '9991112222')
+    `).run(bulkMale1.lastInsertRowid, `BM1-${bulkTs}`);
 
     const bulkMale2 = db.prepare(`
-        INSERT INTO users (email, password_hash, role, status) VALUES ('bulk.m2@test.com', 'hash', 'student', 'active')
-    `).run();
+        INSERT INTO users (email, password_hash, role, status) VALUES (?, 'hash', 'student', 'active')
+    `).run(`bulk.m2.${bulkTs}@test.com`);
     db.prepare(`
         INSERT INTO students (user_id, enrollment_no, full_name, gender, department, year_of_study, mobile, guardian_contact)
-        VALUES (?, 'BULK-M2', 'Bulk Student 2', 'Male', 'ME', 4, '9991112223', '9991112224')
-    `).run(bulkMale2.lastInsertRowid);
+        VALUES (?, ?, 'Bulk Student 2', 'Male', 'ME', 4, '9991112223', '9991112224')
+    `).run(bulkMale2.lastInsertRowid, `BM2-${bulkTs}`);
 
     const bulkFem1 = db.prepare(`
-        INSERT INTO users (email, password_hash, role, status) VALUES ('bulk.f1@test.com', 'hash', 'student', 'active')
-    `).run();
+        INSERT INTO users (email, password_hash, role, status) VALUES (?, 'hash', 'student', 'active')
+    `).run(`bulk.f1.${bulkTs}@test.com`);
     db.prepare(`
         INSERT INTO students (user_id, enrollment_no, full_name, gender, department, year_of_study, mobile, guardian_contact)
-        VALUES (?, 'BULK-F1', 'Bulk Student 3', 'Female', 'EE', 1, '9991112225', '9991112226')
-    `).run(bulkFem1.lastInsertRowid);
+        VALUES (?, ?, 'Bulk Student 3', 'Female', 'EE', 1, '9991112225', '9991112226')
+    `).run(bulkFem1.lastInsertRowid, `BF1-${bulkTs}`);
 
     // Fetch vacant beds for boys and girls before bulk allocation
     const vacantBedsBoysBefore = db.prepare(`
