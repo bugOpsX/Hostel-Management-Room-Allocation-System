@@ -105,6 +105,9 @@
                         <li><a class="dropdown-item" href="/api/admin/reports/export-csv?type=complaints"><i class="bi bi-tools me-2 text-warning"></i>Maintenance Complaints</a></li>
                     </ul>
                 </div>
+                <button class="btn btn-outline-dark btn-sm" onclick="runMaintenanceDaemon()" title="Run Overdue Fee & 72h Escalation Check (FR-43, BR-10)">
+                    <i class="bi bi-arrow-repeat me-1"></i> Run Cron Daemon
+                </button>
                 <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#bulkRoomModal">
                     <i class="bi bi-file-earmark-arrow-up me-1"></i> Bulk Upload Rooms (CSV)
                 </button>
@@ -1523,6 +1526,25 @@ Sarojini Girls Hostel,203,2,Single,1`;
                 (l.user_email && l.user_email.toLowerCase().includes(q))
             );
             renderAuditLogs(filtered);
+        }
+
+        async function runMaintenanceDaemon() {
+            try {
+                showToast('Running background maintenance tasks...', 'info');
+                const res = await fetch('/api/admin/maintenance/run-cron', { method: 'POST' });
+                const data = await res.json();
+                if (res.ok) {
+                    showToast(data.message, 'success');
+                    await loadDashboard();
+                    await loadFees();
+                    await loadComplaints();
+                    await loadAuditLogs();
+                } else {
+                    showToast(data.error || 'Failed to execute maintenance', 'error');
+                }
+            } catch (err) {
+                showToast('Connection error', 'error');
+            }
         }
 
         init();

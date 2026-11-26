@@ -30,5 +30,17 @@ try {
 try {
     db.exec('ALTER TABLE audit_logs ADD COLUMN hostel_id INTEGER;');
 } catch (e) {}
+try {
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS password_resets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            token TEXT UNIQUE NOT NULL,
+            expires_at DATETIME NOT NULL,
+            used INTEGER DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+    `);
+} catch (e) {}
 
 module.exports = db;

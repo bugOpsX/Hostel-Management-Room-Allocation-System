@@ -4,6 +4,7 @@ const path = require('path');
 
 // Ensure db is loaded
 require('./db');
+const { startCronDaemon } = require('./utils/cron');
 
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
@@ -52,6 +53,9 @@ app.use((err, req, res, next) => {
 });
 
 if (require.main === module) {
+    // Start background maintenance cron daemon (FR-43, BR-10)
+    startCronDaemon();
+
     app.listen(PORT, () => {
         console.log(`🚀 HMRAS Server running at http://localhost:${PORT}`);
         console.log(`Ready for evaluation and production use.`);

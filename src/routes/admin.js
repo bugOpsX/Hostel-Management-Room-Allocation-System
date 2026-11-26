@@ -104,7 +104,7 @@ router.post('/students/:id/approve', (req, res) => {
         if (!student) return res.status(404).json({ error: 'Student not found' });
 
         db.prepare("UPDATE users SET status = 'active' WHERE id = ?").run(student.user_id);
-        logAudit(req.session.user.id, req.session.user.email, 'STUDENT_APPROVAL', `Approved account for ${student.full_name} (${student.enrollment_no}).`);
+        logAudit(req.session.user.id, req.session.user.email, 'STUDENT_APPROVAL', `Approved account for ${student.full_name} (${student.enrollment_no}).`, student.id, null);
         res.json({ success: true, message: 'Student account approved successfully' });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -422,7 +422,7 @@ router.post('/allocations/manual', (req, res) => {
                 VALUES (?, ?, ?, ?, 'Unpaid')
             `).run(newAlloc.lastInsertRowid, feeTerm, feeCost, dueStr);
 
-            logAudit(req.session.user.id, req.session.user.email, 'ROOM_ALLOCATION', `Allocated Bed ${bed.bed_no} in ${bed.hostel_name} to ${student.full_name} (${student.enrollment_no}).`);
+            logAudit(req.session.user.id, req.session.user.email, 'ROOM_ALLOCATION', `Allocated Bed ${bed.bed_no} in ${bed.hostel_name} to ${student.full_name} (${student.enrollment_no}).`, student.id, bed.hostel_id);
             return newAlloc.lastInsertRowid;
         });
 
@@ -474,7 +474,7 @@ router.post('/allocations/auto', (req, res) => {
                 VALUES (?, ?, 'Waiting')
             `).run(student_id, nextPriority);
 
-            logAudit(req.session.user.id, req.session.user.email, 'WAITLIST_ADD', `No bed vacant in ${expectedHostelType} hostels. Student ${student.full_name} added to Waitlist at position #${nextPriority} (FR-26).`);
+            logAudit(req.session.user.id, req.session.user.email, 'WAITLIST_ADD', `No bed vacant in ${expectedHostelType} hostels. Student ${student.full_name} added to Waitlist at position #${nextPriority} (FR-26).`, student.id, null);
 
             return res.status(200).json({
                 waitlisted: true,
@@ -502,7 +502,7 @@ router.post('/allocations/auto', (req, res) => {
                 VALUES (?, ?, ?, ?, 'Unpaid')
             `).run(newAlloc.lastInsertRowid, feeTerm, feeCost, dueStr);
 
-            logAudit(req.session.user.id, req.session.user.email, 'AUTO_ALLOCATION', `Auto-allocated Room ${vacantBed.room_no}, Bed ${vacantBed.bed_no} in ${vacantBed.hostel_name} to ${student.full_name}.`);
+            logAudit(req.session.user.id, req.session.user.email, 'AUTO_ALLOCATION', `Auto-allocated Room ${vacantBed.room_no}, Bed ${vacantBed.bed_no} in ${vacantBed.hostel_name} to ${student.full_name}.`, student.id, vacantBed.hostel_id);
 
             return { allocId: newAlloc.lastInsertRowid, bed: vacantBed };
         });
@@ -611,6 +611,15 @@ router.post('/allocations/bulk', (req, res) => {
                     insertFee.run(allocRes.lastInsertRowid, feeTerm, feeCost, dueStr);
                     updateWaitlist.run(student.id);
 
+                    logAudit(
+                        req.session.user.id,
+                        req.session.user.email,
+                        'ROOM_ALLOCATION',
+                        `Bulk allocation assigned Bed ${bed.bed_no} in ${bed.hostel_name} (Room ${bed.room_no}) to ${student.full_name}.`,
+                        student.id,
+                        bed.hostel_id
+                    );
+
                     allocatedList.push({
                         student_id: student.id,
                         student_name: student.full_name,
@@ -627,6 +636,15 @@ router.post('/allocations/bulk', (req, res) => {
                         currentMaxPriority++;
                         insertWaitlist.run(student.id, currentMaxPriority);
                     }
+
+                    logAudit(
+                        req.session.user.id,
+                        req.session.user.email,
+                        'WAITLIST_ADD',
+                        `Bulk engine placed student on waitlist at priority #${currentMaxPriority} (All ${expectedHostelType} hostels full).`,
+                        student.id,
+                        null
+                    );
 
                     waitlistedList.push({
                         student_id: student.id,
@@ -725,7 +743,7 @@ router.post('/waitlist/:id/allocate', (req, res) => {
                 VALUES (?, 'Academic Term 2026-27', 25000, ?, 'Unpaid')
             `).run(newAlloc.lastInsertRowid, dueDate.toISOString().split('T')[0]);
 
-            logAudit(req.session.user.id, req.session.user.email, 'WAITLIST_ALLOCATED', `Waitlisted student ${entry.full_name} allocated Bed ${vacantBed.bed_no} in ${vacantBed.hostel_name}.`);
+            logAudit(req.session.user.id, req.session.user.email, 'WAITLIST_ALLOCATED', `Waitlisted student ${entry.full_name} allocated Bed ${vacantBed.bed_no} in ${vacantBed.hostel_name}.`, entry.student_id, vacantBed.hostel_id);
         });
 
         allocTx();
@@ -792,7 +810,7 @@ router.post('/requests/:id/action', (req, res) => {
         if (action === 'Reject') {
             db.prepare("UPDATE room_requests SET status = 'Rejected', admin_remarks = ? WHERE id = ?")
                 .run(remarks || 'Rejected by Administrator', req.params.id);
-            logAudit(req.session.user.id, req.session.user.email, 'REQUEST_REJECT', `Rejected ${request.request_type} request for ${request.full_name}.`);
+            logAudit(req.session.user.id, req.session.user.email, 'REQUEST_REJECT', `Rejected ${request.request_type} request for ${request.full_name}.`, request.student_id, null);
             return res.json({ success: true, message: 'Request rejected.' });
         }
 
@@ -814,7 +832,7 @@ router.post('/requests/:id/action', (req, res) => {
                 db.prepare("UPDATE room_requests SET status = 'Approved', admin_remarks = ? WHERE id = ?")
                     .run(remarks || 'Approved and vacated.', req.params.id);
 
-                logAudit(req.session.user.id, req.session.user.email, 'VACATE_APPROVE', `Vacated bed #${request.current_bed_id} for ${request.full_name}.`);
+                logAudit(req.session.user.id, req.session.user.email, 'VACATE_APPROVE', `Vacated bed #${request.current_bed_id} for ${request.full_name}.`, request.student_id, null);
             });
             vacateTx();
             return res.json({ success: true, message: 'Vacating request approved. Bed released and allocation closed.' });
@@ -865,7 +883,7 @@ router.post('/requests/:id/action', (req, res) => {
                 db.prepare("UPDATE room_requests SET status = 'Approved', admin_remarks = ? WHERE id = ?")
                     .run(remarks || 'Transfer approved.', req.params.id);
 
-                logAudit(req.session.user.id, req.session.user.email, 'TRANSFER_APPROVE', `Transferred ${request.full_name} from Bed #${request.current_bed_id} to Bed #${targetBed.id}.`);
+                logAudit(req.session.user.id, req.session.user.email, 'TRANSFER_APPROVE', `Transferred ${request.full_name} from Bed #${request.current_bed_id} to Bed #${targetBed.id}.`, request.student_id, null);
             });
 
             transferTx();
@@ -903,7 +921,14 @@ router.get('/fees', (req, res) => {
 router.post('/fees/:id/record-payment', (req, res) => {
     const { mode, transaction_ref, amount } = req.body;
     try {
-        const fee = db.prepare('SELECT * FROM fees WHERE id = ?').get(req.params.id);
+        const fee = db.prepare(`
+            SELECT f.*, a.student_id, r.hostel_id 
+            FROM fees f 
+            JOIN allocations a ON f.allocation_id = a.id 
+            JOIN beds b ON a.bed_id = b.id 
+            JOIN rooms r ON b.room_id = r.id 
+            WHERE f.id = ?
+        `).get(req.params.id);
         if (!fee) return res.status(404).json({ error: 'Fee record not found' });
         if (fee.status === 'Paid') return res.status(400).json({ error: 'Fee has already been paid.' });
 
@@ -916,7 +941,7 @@ router.post('/fees/:id/record-payment', (req, res) => {
             `).run(fee.id, payAmount, mode || 'Cash', ref);
 
             db.prepare("UPDATE fees SET status = 'Paid' WHERE id = ?").run(fee.id);
-            logAudit(req.session.user.id, req.session.user.email, 'FEE_PAYMENT_RECORD', `Recorded payment of ₹${payAmount} (${mode || 'Cash'}) for Fee #${fee.id}.`);
+            logAudit(req.session.user.id, req.session.user.email, 'FEE_PAYMENT_RECORD', `Recorded payment of ₹${payAmount} (${mode || 'Cash'}) for Fee #${fee.id}.`, fee.student_id, fee.hostel_id);
         });
 
         payTx();
@@ -1011,6 +1036,21 @@ router.get('/wardens', (req, res) => {
     try {
         const wardens = db.prepare("SELECT id, email FROM users WHERE role = 'warden' AND status = 'active'").all();
         res.json(wardens);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 10. Manual Trigger for Cron Maintenance Tasks (FR-43, BR-10)
+const { runDailyMaintenanceTasks } = require('../utils/cron');
+router.post('/maintenance/run-cron', (req, res) => {
+    try {
+        const results = runDailyMaintenanceTasks();
+        res.json({
+            success: true,
+            message: `Maintenance daemon completed: ${results.overdueCount} fees moved to Overdue (FR-43), ${results.escalatedCount} complaints escalated to High (BR-10).`,
+            details: results
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

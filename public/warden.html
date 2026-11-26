@@ -392,28 +392,41 @@
         </div>
     </div>
 
-    <!-- Digital QR Visitor Pass Modal -->
+    <!-- Digital QR Visitor Pass Modal (FR-61 / SRS Section 4) -->
     <div class="modal fade" id="passModal" tabindex="-1">
         <div class="modal-dialog modal-sm text-center">
-            <div class="modal-content p-3">
-                <div class="modal-header border-0 pb-0">
-                    <h5 class="modal-title fw-bold text-center w-100">Visitor Pass</h5>
+            <div class="modal-content p-3 shadow">
+                <div class="modal-header border-0 pb-0 justify-content-between align-items-center">
+                    <span class="badge bg-primary text-uppercase px-2 py-1"><i class="bi bi-shield-lock me-1"></i>MU Gate Pass</span>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body py-2">
-                    <div class="bg-light p-3 rounded mb-2 border">
-                        <i class="bi bi-qr-code fs-1 text-dark"></i>
-                        <h5 class="fw-bold font-monospace mt-2 mb-0" id="passCodeDisplay">VPASS-000000</h5>
+                    <h5 class="fw-bold mb-0" id="passModalVisitor">Visitor Name</h5>
+                    <div class="text-muted small mb-2">Visiting: <span id="passModalStudent" class="fw-semibold">Resident</span></div>
+                    
+                    <div class="bg-light p-3 rounded border text-center">
+                        <div id="passQrCanvas" class="d-flex justify-content-center mb-2"></div>
+                        <h5 class="fw-bold font-monospace text-primary mb-1" id="passCodeDisplay">VPASS-000000</h5>
+                        <div class="badge bg-success-subtle text-success border border-success-subtle small">
+                            <i class="bi bi-clock-history me-1"></i> Valid 09:00 - 19:00 (BR-08)
+                        </div>
                     </div>
-                    <p class="small text-muted mb-0">Show this digital pass code to hostel security when leaving the premises.</p>
+                    
+                    <div class="text-muted mt-2" style="font-size: 0.72rem;">
+                        Scan at campus security gate on entry & departure (FR-61).
+                    </div>
                 </div>
-                <div class="modal-footer border-0 pt-0">
-                    <button type="button" class="btn btn-primary btn-sm w-100" data-bs-dismiss="modal">Done</button>
+                <div class="modal-footer border-0 pt-0 d-flex gap-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary btn-sm flex-fill" onclick="window.print()">
+                        <i class="bi bi-printer me-1"></i> Print Pass
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         function showToast(message, type = 'success') {
@@ -631,11 +644,16 @@
                         </span>
                     </td>
                     <td>
-                        ${!v.out_time ? `
-                            <button class="btn btn-sm btn-outline-danger py-0 px-2" onclick="recordVisitorExit(${v.id})">
-                                Record Exit
+                        <div class="d-flex gap-1 flex-wrap">
+                            <button class="btn btn-sm btn-outline-primary py-0 px-2" onclick="showVisitorPass('${v.pass_code || 'VPASS-' + v.id}', '${v.visitor_name.replace(/'/g, "\\'")}', '${v.student_name.replace(/'/g, "\\'")}')" title="View Digital QR Pass">
+                                <i class="bi bi-qr-code me-1"></i> QR Pass
                             </button>
-                        ` : ''}
+                            ${!v.out_time ? `
+                                <button class="btn btn-sm btn-outline-danger py-0 px-2" onclick="recordVisitorExit(${v.id})">
+                                    Record Exit
+                                </button>
+                            ` : ''}
+                        </div>
                     </td>
                 </tr>
             `).join('');
@@ -661,6 +679,31 @@
             }
         }
 
+        function showVisitorPass(passCode, visitorName, studentName) {
+            document.getElementById('passModalVisitor').textContent = visitorName;
+            document.getElementById('passModalStudent').textContent = studentName || 'Resident';
+            document.getElementById('passCodeDisplay').textContent = passCode;
+
+            const qrContainer = document.getElementById('passQrCanvas');
+            qrContainer.innerHTML = '';
+            try {
+                if (window.QRCode) {
+                    new QRCode(qrContainer, {
+                        text: JSON.stringify({ pass: passCode, visitor: visitorName, resident: studentName, hours: '09:00-19:00' }),
+                        width: 140,
+                        height: 140,
+                        colorDark : "#1e3c72",
+                        colorLight : "#ffffff",
+                        correctLevel : QRCode.CorrectLevel.M
+                    });
+                }
+            } catch (err) {
+                console.error('QR code render error:', err);
+            }
+
+            new bootstrap.Modal(document.getElementById('passModal')).show();
+        }
+
         document.getElementById('addVisitorForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const payload = {
@@ -680,9 +723,12 @@
             if (res.ok) {
                 bootstrap.Modal.getInstance(document.getElementById('addVisitorModal')).hide();
                 document.getElementById('addVisitorForm').reset();
-                showToast('Visitor entry logged.');
-                document.getElementById('passCodeDisplay').textContent = data.passCode;
-                new bootstrap.Modal(document.getElementById('passModal')).show();
+                showToast('Visitor entry logged successfully.');
+
+                const sel = document.getElementById('visStudentSelect');
+                const studentText = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : 'Resident';
+                showVisitorPass(data.passCode, payload.visitor_name, studentText);
+
                 loadVisitors();
                 loadDashboard();
                 loadWardenActivityLogs();
