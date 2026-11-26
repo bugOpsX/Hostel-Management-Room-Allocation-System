@@ -1,4 +1,5 @@
 const assert = require('assert');
+const fs = require('fs');
 const db = require('../src/db');
 const bcrypt = require('bcryptjs');
 
@@ -358,7 +359,19 @@ async function runTests() {
 
     console.log('✅ 20. Student search by Enrollment No & Audit Log Filter queries verified');
 
-    console.log('\n🎉 ALL 20 VERIFICATION TESTS PASSED SUCCESSFULLY! 🚀');
+    // 21. Test Production Hot Backup & Database Health Check
+    const { createBackup } = require('../src/utils/backup');
+    const backupRes = await createBackup();
+    assert(backupRes && backupRes.filePath, 'Backup utility must return valid backup path');
+    assert(fs.existsSync(backupRes.filePath), 'Backup file must exist on disk');
+    assert(backupRes.sizeBytes > 0, 'Backup file must not be empty');
+
+    // Verify DB integrity check
+    const integrity = db.pragma('integrity_check');
+    assert(integrity[0].integrity_check === 'ok', 'SQLite database must pass integrity check');
+    console.log('✅ 21. Production Hot Backup & Database Integrity verified (Zero-Downtime WAL snapshot)');
+
+    console.log('\n🎉 ALL 21 VERIFICATION TESTS PASSED SUCCESSFULLY! 🚀');
 }
 
 runTests().catch(err => {

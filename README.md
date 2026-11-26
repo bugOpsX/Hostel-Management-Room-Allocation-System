@@ -8,21 +8,37 @@ Built with **Node.js, Express, SQLite (`better-sqlite3`), and clean responsive B
 
 ## 🚀 Quick Start
 
-### 1. Start the Server
+### 1. Start the Server (Development or Production)
 ```bash
+# Development
 npm start
+
+# Production
+npm run prod
 ```
 Open **[http://localhost:3000](http://localhost:3000)** in your browser.
 
-### 2. Run All 18 Automated Verification Tests
+### 2. Docker Deployment (1-Command)
+```bash
+docker compose up -d --build
+```
+
+### 3. Run All 21 Automated Verification Tests
 ```bash
 npm test
 ```
 
-### 3. Reset to Clean Seed Data Anytime
+### 4. Create Safe Hot Database Backup
+```bash
+npm run backup
+```
+
+### 5. Reset to Clean Seed Data Anytime
 ```bash
 npm run seed
 ```
+
+📖 **Detailed Deployment Guide**: See [DEPLOYMENT.md](DEPLOYMENT.md) for Nginx SSL reverse proxy, systemd, PM2, and disaster recovery procedures.
 
 ---
 
