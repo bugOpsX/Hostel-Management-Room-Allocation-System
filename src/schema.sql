@@ -160,3 +160,24 @@ CREATE TABLE IF NOT EXISTS password_resets (
     used INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+-- 15. Student Penalties & Ad-hoc Fees
+CREATE TABLE IF NOT EXISTS penalties (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    allocation_id INTEGER REFERENCES allocations(id),
+    hostel_id INTEGER REFERENCES hostels(id),
+    category TEXT CHECK(category IN ('Property Damage', 'Disciplinary', 'Late Return/Curfew', 'Lost Key Replacement', 'Unauthorized Guest', 'Sanitation/Mess Fine', 'Special Amenity', 'Other')) NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    amount REAL NOT NULL,
+    due_date DATE NOT NULL,
+    status TEXT CHECK(status IN ('Unpaid', 'Paid', 'Waived')) DEFAULT 'Unpaid',
+    imposed_by INTEGER NOT NULL REFERENCES users(id),
+    waived_by INTEGER REFERENCES users(id),
+    waive_reason TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    paid_at DATETIME,
+    payment_mode TEXT,
+    transaction_ref TEXT
+);
