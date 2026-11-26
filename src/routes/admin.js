@@ -31,6 +31,7 @@ router.get('/dashboard', (req, res) => {
 
         const pendingRequests = db.prepare("SELECT COUNT(*) as count FROM room_requests WHERE status = 'Pending'").get().count;
         const overdueFees = db.prepare("SELECT COUNT(*) as count FROM fees WHERE status IN ('Unpaid', 'Overdue')").get().count;
+        const unpaidPenalties = db.prepare("SELECT COUNT(*) as count FROM penalties WHERE status = 'Unpaid'").get().count;
         const waitlistCount = db.prepare("SELECT COUNT(*) as count FROM waitlist WHERE status = 'Waiting'").get().count;
         const unallocatedCount = db.prepare(`
             SELECT COUNT(*) as count FROM students s
@@ -56,6 +57,7 @@ router.get('/dashboard', (req, res) => {
             },
             pendingRequests,
             overdueFees,
+            unpaidPenalties,
             waitlistCount,
             noticesCount,
             badges: {
@@ -63,11 +65,12 @@ router.get('/dashboard', (req, res) => {
                 unallocated: unallocatedCount,
                 waitlist: waitlistCount,
                 pendingRequests,
-                overdueFees,
+                overdueFees: overdueFees + unpaidPenalties,
+                unpaidPenalties,
                 openComplaints: complaintStats.total_open || 0,
                 escalatedComplaints: complaintStats.escalated || 0,
                 notices: noticesCount,
-                totalAlerts: pendingStudents + pendingRequests + (complaintStats.total_open || 0) + overdueFees
+                totalAlerts: pendingStudents + pendingRequests + (complaintStats.total_open || 0) + overdueFees + unpaidPenalties
             }
         });
     } catch (err) {
