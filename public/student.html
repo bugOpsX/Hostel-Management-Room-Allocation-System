@@ -132,7 +132,7 @@
                 <!-- 1. FEES TAB -->
                 <div class="tab-pane fade show active" id="tabFees">
                     <h5 class="fw-bold mb-3"><i class="bi bi-cash-stack me-2"></i>My Hostel Fee Invoices</h5>
-                    <div class="table-responsive">
+                    <div class="table-responsive mb-4">
                         <table class="table table-hover align-middle mb-0">
                             <thead class="table-light">
                                 <tr>
@@ -148,6 +148,32 @@
                                 <tr><td colspan="6" class="text-center py-3 text-muted">Loading fee records...</td></tr>
                             </tbody>
                         </table>
+                    </div>
+
+                    <div class="pt-3 border-top">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="fw-bold mb-0 text-danger"><i class="bi bi-exclamation-octagon me-2"></i>My Fines & Disciplinary Penalties</h5>
+                            <span class="text-muted small">Property damage charges, late curfew return fees, and administrative penalties</span>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Fine ID</th>
+                                        <th>Category</th>
+                                        <th>Reason / Description</th>
+                                        <th>Amount</th>
+                                        <th>Due Date</th>
+                                        <th>Status</th>
+                                        <th>Transaction Ref</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="studentPenaltiesTableBody">
+                                    <tr><td colspan="8" class="text-center py-3 text-muted">No fines or penalties recorded.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
 
@@ -403,6 +429,7 @@
     <script>
         let currentStudent = null;
         let activeFeeToPay = null;
+        let activePenaltyToPay = null;
 
         function showToast(message, type = 'success') {
             const toastEl = document.getElementById('studentToast');
@@ -481,6 +508,42 @@
                                     <i class="bi bi-receipt me-1"></i> Receipt
                                 </button>
                             `}
+                        </td>
+                    </tr>
+                `).join('');
+            }
+
+            // Penalties Table
+            const penTbody = document.getElementById('studentPenaltiesTableBody');
+            if (!data.penalties || data.penalties.length === 0) {
+                penTbody.innerHTML = '<tr><td colspan="8" class="text-center py-3 text-muted">No fines or penalties recorded.</td></tr>';
+            } else {
+                penTbody.innerHTML = data.penalties.map(p => `
+                    <tr>
+                        <td>#${p.id}</td>
+                        <td><span class="badge bg-danger-subtle text-danger border border-danger-subtle">${p.category}</span></td>
+                        <td>
+                            <div class="fw-semibold">${p.title}</div>
+                            ${p.description ? `<small class="text-muted">${p.description}</small>` : ''}
+                        </td>
+                        <td class="fw-bold text-danger">₹${p.amount}</td>
+                        <td class="small">${p.due_date}</td>
+                        <td>
+                            <span class="badge ${p.status === 'Paid' ? 'bg-success' : (p.status === 'Waived' ? 'bg-warning text-dark' : 'bg-danger')}">
+                                ${p.status}
+                            </span>
+                        </td>
+                        <td class="small font-monospace">${p.transaction_ref || '—'}</td>
+                        <td>
+                            ${p.status === 'Unpaid' ? `
+                                <button class="btn btn-sm btn-danger py-0 px-3" onclick="openPenaltyPaymentModal(${p.id}, '${p.title.replace(/'/g, "\\'")}', ${p.amount})">
+                                    <i class="bi bi-credit-card me-1"></i> Pay Fine
+                                </button>
+                            ` : (p.status === 'Paid' ? `
+                                <button class="btn btn-sm btn-outline-primary py-0 px-2" onclick="showReceipt('${p.transaction_ref}', '${p.title.replace(/'/g, "\\'")}', ${p.amount}, '${p.paid_at}')">
+                                    <i class="bi bi-receipt me-1"></i> Receipt
+                                </button>
+                            ` : '<span class="text-muted small">Waived</span>')}
                         </td>
                     </tr>
                 `).join('');
@@ -605,6 +668,15 @@
                     <div class="list-group-item d-flex justify-content-between align-items-center">
                         <div><i class="bi bi-check2-circle text-success me-2"></i><strong>Fee Clearance:</strong> No outstanding fee dues</div>
                         <span class="badge bg-success">Clear (₹0)</span>
+                    </div>
+                `);
+            }
+
+            if (badges.unpaidPenalties > 0) {
+                alertItems.push(`
+                    <div class="list-group-item d-flex justify-content-between align-items-center list-group-item-danger">
+                        <div><i class="bi bi-exclamation-octagon text-danger me-2"></i><strong>Fines & Penalties:</strong> ${badges.unpaidPenalties} unpaid penalty charge(s)</div>
+                        <span class="badge bg-danger">Pay Required</span>
                     </div>
                 `);
             }
