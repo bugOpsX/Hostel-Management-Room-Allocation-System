@@ -965,6 +965,156 @@ router.post('/fees/:id/record-payment', (req, res) => {
     }
 });
 
+// 6b. Penalties & Fines Management
+router.get('/penalties', (req, res) => {
+    try {
+        const penalties = db.prepare(`
+            SELECT 
+                p.*,
+                s.full_name as student_name, s.enrollment_no, s.gender,
+                h.name as hostel_name, r.room_no, b.bed_no,
+                u.email as imposed_by_email,
+                w.email as waived_by_email
+            FROM penalties p
+            JOIN students s ON p.student_id = s.id
+            LEFT JOIN allocations a ON p.allocation_id = a.id
+            LEFT JOIN beds b ON a.bed_id = b.id
+            LEFT JOIN rooms r ON b.room_id = r.id
+            LEFT JOIN hostels h ON COALESCE(p.hostel_id, r.hostel_id) = h.id
+            LEFT JOIN users u ON p.imposed_by = u.id
+            LEFT JOIN users w ON p.waived_by = w.id
+            ORDER BY p.id DESC
+        `).all();
+        res.json(penalties);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/penalties', (req, res) => {
+    const { student_id, category, title, description, amount, due_date } = req.body;
+    if (!student_id || !category || !title || !amount || !due_date) {
+        return res.status(400).json({ error: 'Student, category, title, amount, and due date are required.' });
+    }
+
+    try {
+        const student = db.prepare('SELECT id, full_name, enrollment_no FROM students WHERE id = ?').get(student_id);
+        if (!student) return res.status(404).json({ error: 'Student not found' });
+
+        const activeAlloc = db.prepare(`
+            SELECT a.id, r.hostel_id 
+            FROM allocations a 
+            JOIN beds b ON a.bed_id = b.id 
+            JOIN rooms r ON b.room_id = r.id 
+            WHERE a.student_id = ? AND a.status = 'Active'
+        `).get(student_id);
+
+        const ins = db.prepare(`
+            INSERT INTO penalties (student_id, allocation_id, hostel_id, category, title, description, amount, due_date, status, imposed_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Unpaid', ?)
+        `).run(
+            student_id,
+            activeAlloc ? activeAlloc.id : null,
+            activeAlloc ? activeAlloc.hostel_id : null,
+            category,
+            title.trim(),
+            (description || '').trim(),
+            parseFloat(amount),
+            due_date,
+            req.session.user.id
+        );
+
+        logAudit(
+            req.session.user.id,
+            req.session.user.email,
+            'PENALTY_LEVIED',
+            `Admin levied ₹${amount} penalty (${category}: ${title.trim()}) on ${student.full_name} (${student.enrollment_no}).`,
+            student_id,
+            activeAlloc ? activeAlloc.hostel_id : null
+        );
+
+        res.json({ success: true, penaltyId: ins.lastInsertRowid, message: `Penalty of ₹${amount} successfully levied on ${student.full_name}.` });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/penalties/:id/record-payment', (req, res) => {
+    const { amount, mode, transaction_ref } = req.body;
+    try {
+        const penalty = db.prepare(`
+            SELECT p.*, s.full_name, s.enrollment_no
+            FROM penalties p
+            JOIN students s ON p.student_id = s.id
+            WHERE p.id = ?
+        `).get(req.params.id);
+
+        if (!penalty) return res.status(404).json({ error: 'Penalty record not found' });
+        if (penalty.status === 'Paid') return res.status(400).json({ error: 'Penalty has already been paid.' });
+        if (penalty.status === 'Waived') return res.status(400).json({ error: 'Penalty has been waived.' });
+
+        const payAmount = amount ? parseFloat(amount) : penalty.amount;
+        const ref = transaction_ref || `OFFLINE-PEN-${Date.now()}`;
+
+        db.prepare(`
+            UPDATE penalties 
+            SET status = 'Paid', paid_at = CURRENT_TIMESTAMP, payment_mode = ?, transaction_ref = ?
+            WHERE id = ?
+        `).run(mode || 'Cash', ref, penalty.id);
+
+        logAudit(
+            req.session.user.id,
+            req.session.user.email,
+            'PENALTY_PAID_RECORD',
+            `Admin recorded ₹${payAmount} payment (${mode || 'Cash'}) for Penalty #${penalty.id} (${penalty.title}) for ${penalty.full_name}.`,
+            penalty.student_id,
+            penalty.hostel_id
+        );
+
+        res.json({ success: true, message: 'Penalty payment recorded successfully.' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/penalties/:id/waive', (req, res) => {
+    const { reason } = req.body;
+    if (!reason || !reason.trim()) {
+        return res.status(400).json({ error: 'Reason for waiving fine is mandatory.' });
+    }
+
+    try {
+        const penalty = db.prepare(`
+            SELECT p.*, s.full_name 
+            FROM penalties p
+            JOIN students s ON p.student_id = s.id
+            WHERE p.id = ?
+        `).get(req.params.id);
+
+        if (!penalty) return res.status(404).json({ error: 'Penalty record not found' });
+        if (penalty.status !== 'Unpaid') return res.status(400).json({ error: `Cannot waive: Penalty is already ${penalty.status}.` });
+
+        db.prepare(`
+            UPDATE penalties 
+            SET status = 'Waived', waived_by = ?, waive_reason = ?
+            WHERE id = ?
+        `).run(req.session.user.id, reason.trim(), penalty.id);
+
+        logAudit(
+            req.session.user.id,
+            req.session.user.email,
+            'PENALTY_WAIVED',
+            `Penalty #${penalty.id} (₹${penalty.amount}, ${penalty.title}) for ${penalty.full_name} waived. Reason: "${reason.trim()}".`,
+            penalty.student_id,
+            penalty.hostel_id
+        );
+
+        res.json({ success: true, message: 'Penalty waived successfully.' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // 7. Audit Logs Endpoint
 router.get('/audit-logs', (req, res) => {
     try {
