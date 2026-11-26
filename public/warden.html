@@ -670,14 +670,33 @@
         }
 
         async function loadStudentsForVisitor() {
-            const res = await fetch('/api/admin/students');
-            if (res.ok) {
-                const students = await res.json();
-                document.getElementById('visStudentSelect').innerHTML = '<option value="">Select Resident...</option>' + students.map(s => `
-                    <option value="${s.student_id}">${s.full_name} (${s.enrollment_no})</option>
-                `).join('');
+            try {
+                const res = await fetch('/api/warden/residents');
+                if (res.ok) {
+                    const residents = await res.json();
+                    const select = document.getElementById('visStudentSelect');
+                    if (residents.length === 0) {
+                        select.innerHTML = '<option value="">No residents currently allocated to this hostel</option>';
+                    } else {
+                        select.innerHTML = '<option value="">Select Resident Visited...</option>' + residents.map(s => `
+                            <option value="${s.student_id}">${s.full_name} (${s.enrollment_no}) — Room ${s.room_no} (Bed ${s.bed_no})</option>
+                        `).join('');
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to load residents for visitor:', err);
             }
         }
+
+        document.getElementById('addVisitorModal').addEventListener('show.bs.modal', () => {
+            loadStudentsForVisitor();
+            const hour = new Date().getHours();
+            if (hour < 9 || hour >= 19) {
+                document.getElementById('overrideDiv').style.display = 'block';
+            } else {
+                document.getElementById('overrideDiv').style.display = 'none';
+            }
+        });
 
         function showVisitorPass(passCode, visitorName, studentName) {
             document.getElementById('passModalVisitor').textContent = visitorName;

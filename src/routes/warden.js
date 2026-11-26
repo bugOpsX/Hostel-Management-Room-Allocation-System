@@ -236,6 +236,30 @@ router.get('/visitors', (req, res) => {
     }
 });
 
+// GET /api/warden/residents (FR-61: Active residents allocated to warden's hostel)
+router.get('/residents', (req, res) => {
+    try {
+        const hostel = getWardenHostel(req.session.user.id);
+        if (!hostel) return res.json([]);
+
+        const residents = db.prepare(`
+            SELECT 
+                s.id as student_id, s.full_name, s.enrollment_no, s.department, s.mobile,
+                r.room_no, b.bed_no
+            FROM allocations a
+            JOIN students s ON a.student_id = s.id
+            JOIN beds b ON a.bed_id = b.id
+            JOIN rooms r ON b.room_id = r.id
+            WHERE r.hostel_id = ? AND a.status = 'Active'
+            ORDER BY r.room_no, b.bed_no, s.full_name
+        `).all(hostel.id);
+
+        res.json(residents);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 router.post('/visitors/in', (req, res) => {
     const { visitor_name, relation, id_proof, student_id, purpose, override_reason } = req.body;
     if (!visitor_name || !relation || !id_proof || !student_id || !purpose) {
