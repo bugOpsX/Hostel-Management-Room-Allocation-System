@@ -114,6 +114,55 @@ router.post('/students/:id/approve', (req, res) => {
     }
 });
 
+// Student Full Details & History by ID
+router.get('/students/:id/details', (req, res) => {
+    try {
+        const student = db.prepare(`
+            SELECT 
+                s.*, u.email, u.status as account_status, u.created_at as account_created_at
+            FROM students s
+            JOIN users u ON s.user_id = u.id
+            WHERE s.id = ?
+        `).get(req.params.id);
+
+        if (!student) return res.status(404).json({ error: 'Student not found' });
+
+        const activeAllocation = db.prepare(`
+            SELECT a.*, r.room_no, b.bed_no, h.name as hostel_name
+            FROM allocations a
+            JOIN beds b ON a.bed_id = b.id
+            JOIN rooms r ON b.room_id = r.id
+            JOIN hostels h ON r.hostel_id = h.id
+            WHERE a.student_id = ? AND a.status = 'Active'
+        `).get(student.id);
+
+        const allocationHistory = db.prepare(`
+            SELECT a.*, r.room_no, b.bed_no, h.name as hostel_name
+            FROM allocations a
+            JOIN beds b ON a.bed_id = b.id
+            JOIN rooms r ON b.room_id = r.id
+            JOIN hostels h ON r.hostel_id = h.id
+            WHERE a.student_id = ?
+            ORDER BY a.start_date DESC
+        `).all(student.id);
+
+        const fees = db.prepare('SELECT * FROM fees WHERE allocation_id IN (SELECT id FROM allocations WHERE student_id = ?) ORDER BY due_date DESC').all(student.id);
+        const penalties = db.prepare('SELECT * FROM penalties WHERE student_id = ? ORDER BY created_at DESC').all(student.id);
+        const complaints = db.prepare('SELECT * FROM complaints WHERE student_id = ? ORDER BY created_at DESC').all(student.id);
+
+        res.json({
+            student,
+            activeAllocation,
+            allocationHistory,
+            fees,
+            penalties,
+            complaints
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // 3. Hostels & Rooms
 router.get('/hostels', (req, res) => {
     try {
@@ -1118,7 +1167,27 @@ router.post('/penalties/:id/waive', (req, res) => {
 // 7. Audit Logs Endpoint
 router.get('/audit-logs', (req, res) => {
     try {
-        const logs = db.prepare('SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 100').all();
+        const { q, category } = req.query;
+        let sql = 'SELECT * FROM audit_logs';
+        const params = [];
+        const conditions = [];
+
+        if (category && category !== 'ALL') {
+            conditions.push('action LIKE ?');
+            params.push(`${category}%`);
+        }
+        if (q && q.trim()) {
+            conditions.push('(action LIKE ? OR details LIKE ? OR user_email LIKE ?)');
+            const term = `%${q.trim()}%`;
+            params.push(term, term, term);
+        }
+
+        if (conditions.length > 0) {
+            sql += ' WHERE ' + conditions.join(' AND ');
+        }
+        sql += ' ORDER BY created_at DESC LIMIT 250';
+
+        const logs = db.prepare(sql).all(...params);
         res.json(logs);
     } catch (err) {
         res.status(500).json({ error: err.message });

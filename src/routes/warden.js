@@ -251,8 +251,8 @@ router.get('/residents', (req, res) => {
 
         const residents = db.prepare(`
             SELECT 
-                s.id as student_id, s.full_name, s.enrollment_no, s.department, s.mobile,
-                r.room_no, b.bed_no
+                s.id as student_id, s.full_name, s.enrollment_no, s.department, s.mobile, s.gender, s.year_of_study,
+                r.room_no, r.floor, b.bed_no, a.id as allocation_id, a.start_date
             FROM allocations a
             JOIN students s ON a.student_id = s.id
             JOIN beds b ON a.bed_id = b.id
@@ -262,6 +262,55 @@ router.get('/residents', (req, res) => {
         `).all(hostel.id);
 
         res.json(residents);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Resident Full Profile for Warden
+router.get('/residents/:id/profile', (req, res) => {
+    try {
+        const hostel = getWardenHostel(req.session.user.id);
+        if (!hostel) return res.status(400).json({ error: 'No hostel assigned' });
+
+        const student = db.prepare(`
+            SELECT 
+                s.*, u.email,
+                r.room_no, r.floor, b.bed_no, a.id as allocation_id, a.start_date
+            FROM allocations a
+            JOIN students s ON a.student_id = s.id
+            JOIN users u ON s.user_id = u.id
+            JOIN beds b ON a.bed_id = b.id
+            JOIN rooms r ON b.room_id = r.id
+            WHERE s.id = ? AND r.hostel_id = ? AND a.status = 'Active'
+        `).get(req.params.id, hostel.id);
+
+        if (!student) return res.status(404).json({ error: 'Resident not found in your hostel' });
+
+        const complaints = db.prepare(`
+            SELECT * FROM complaints 
+            WHERE student_id = ? AND hostel_id = ? 
+            ORDER BY created_at DESC
+        `).all(student.id, hostel.id);
+
+        const visitors = db.prepare(`
+            SELECT * FROM visitors 
+            WHERE student_id = ? AND hostel_id = ? 
+            ORDER BY in_time DESC
+        `).all(student.id, hostel.id);
+
+        const penalties = db.prepare(`
+            SELECT * FROM penalties 
+            WHERE student_id = ? AND hostel_id = ? 
+            ORDER BY created_at DESC
+        `).all(student.id, hostel.id);
+
+        res.json({
+            resident: student,
+            complaints,
+            visitors,
+            penalties
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -348,13 +397,23 @@ router.get('/activity-logs', (req, res) => {
         const hostel = getWardenHostel(req.session.user.id);
         if (!hostel) return res.json([]);
 
-        const logs = db.prepare(`
-            SELECT * FROM audit_logs 
-            WHERE hostel_id = ? OR user_id = ?
-            ORDER BY created_at DESC 
-            LIMIT 50
-        `).all(hostel.id, req.session.user.id);
+        const { q, category } = req.query;
+        let sql = 'SELECT * FROM audit_logs WHERE (hostel_id = ? OR user_id = ?)';
+        const params = [hostel.id, req.session.user.id];
 
+        if (category && category !== 'ALL') {
+            sql += ' AND action LIKE ?';
+            params.push(`${category}%`);
+        }
+        if (q && q.trim()) {
+            sql += ' AND (action LIKE ? OR details LIKE ? OR user_email LIKE ?)';
+            const term = `%${q.trim()}%`;
+            params.push(term, term, term);
+        }
+
+        sql += ' ORDER BY created_at DESC LIMIT 150';
+
+        const logs = db.prepare(sql).all(...params);
         res.json(logs);
     } catch (err) {
         res.status(500).json({ error: err.message });
