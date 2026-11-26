@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hostel Management & Room Allocation System (HMRAS)</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        body { background-color: #f4f6f9; font-family: system-ui, -apple-system, sans-serif; }
+        .hero-banner { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 2.5rem 0; margin-bottom: 2rem; }
+        .card { border-radius: 10px; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+        .nav-tabs .nav-link.active { font-weight: 600; color: #1e3c72; }
+        .demo-badge { cursor: pointer; transition: transform 0.1s; }
+        .demo-badge:hover { transform: scale(1.05); }
+    </style>
+</head>
+<body>
+
+    <!-- Header Banner -->
+    <div class="hero-banner shadow-sm">
+        <div class="container">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <div>
+                    <h2 class="fw-bold mb-1"><i class="bi bi-building-fill-check me-2"></i>Hostel Management & Room Allocation</h2>
+                    <p class="mb-0 opacity-75">Marwadi University • Centralized Campus Accommodation Portal</p>
+                </div>
+                <div class="text-end">
+                    <span class="badge bg-light text-primary fs-6 py-2 px-3"><i class="bi bi-shield-lock me-1"></i>HMRAS Core System</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container pb-5">
+        <div class="row g-4 justify-content-center">
+            
+            <!-- Left Side: Login & Registration Cards -->
+            <div class="col-lg-7">
+                <div class="card p-4">
+                    <ul class="nav nav-tabs mb-4" id="authTabs" role="tablist">
+                        <li class="nav-item flex-fill text-center" role="presentation">
+                            <button class="nav-link active w-100 fs-5" id="login-tab" data-bs-toggle="tab" data-bs-target="#loginPane" type="button" role="tab">
+                                <i class="bi bi-box-arrow-in-right me-1"></i> Sign In
+                            </button>
+                        </li>
+                        <li class="nav-item flex-fill text-center" role="presentation">
+                            <button class="nav-link w-100 fs-5" id="register-tab" data-bs-toggle="tab" data-bs-target="#registerPane" type="button" role="tab">
+                                <i class="bi bi-person-plus me-1"></i> Student Self-Register
+                            </button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content" id="authTabsContent">
+                        <!-- Sign In Tab -->
+                        <div class="tab-pane fade show active" id="loginPane" role="tabpanel">
+                            <div id="loginAlert" class="alert d-none"></div>
+
+                            <form id="loginForm">
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold">Email or Enrollment Number</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text"><i class="bi bi-person"></i></span>
+                                        <input type="text" id="loginIdentifier" class="form-control" placeholder="e.g. admin@hostel.com or 2026CS101" required>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold">Password</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text"><i class="bi bi-key"></i></span>
+                                        <input type="password" id="loginPassword" class="form-control" placeholder="••••••••" required>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold">
+                                    <i class="bi bi-box-arrow-in-right me-1"></i> Access Portal
+                                </button>
+                            </form>
+
+                            <!-- Demo Quick Login Buttons -->
+                            <div class="mt-4 pt-3 border-top">
+                                <p class="text-muted small fw-bold mb-2">⚡ QUICK DEMO LOGINS (Click to auto-fill):</p>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <span class="badge bg-danger demo-badge py-2 px-3" onclick="fillLogin('admin@hostel.com', 'admin123')">
+                                        <i class="bi bi-shield-shaded me-1"></i> Admin
+                                    </span>
+                                    <span class="badge bg-warning text-dark demo-badge py-2 px-3" onclick="fillLogin('warden.boys@hostel.com', 'warden123')">
+                                        <i class="bi bi-person-badge me-1"></i> Boys Warden
+                                    </span>
+                                    <span class="badge bg-info text-dark demo-badge py-2 px-3" onclick="fillLogin('rahul@student.com', 'student123')">
+                                        <i class="bi bi-mortarboard me-1"></i> Student (Active)
+                                    </span>
+                                    <span class="badge bg-secondary demo-badge py-2 px-3" onclick="fillLogin('amit@student.com', 'student123')">
+                                        <i class="bi bi-hourglass me-1"></i> Student (Pending)
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Registration Tab -->
+                        <div class="tab-pane fade" id="registerPane" role="tabpanel">
+                            <div id="registerAlert" class="alert d-none"></div>
+
+                            <form id="registerForm">
+                                <div class="row g-2">
+                                    <div class="col-md-6 mb-2">
+                                        <label class="form-label small fw-semibold">Enrollment / Roll No *</label>
+                                        <input type="text" id="regEnrollment" class="form-control" placeholder="2026CS501" required>
+                                    </div>
+                                    <div class="col-md-6 mb-2">
+                                        <label class="form-label small fw-semibold">Full Name *</label>
+                                        <input type="text" id="regName" class="form-control" placeholder="e.g. Ananya Rao" required>
+                                    </div>
+                                    <div class="col-md-6 mb-2">
+                                        <label class="form-label small fw-semibold">Gender *</label>
+                                        <select id="regGender" class="form-select" required>
+                                            <option value="">Select Gender</option>
+                                            <option value="Male">Male</option>
+                                            <option value="Female">Female</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 mb-2">
+                                        <label class="form-label small fw-semibold">Department *</label>
+                                        <input type="text" id="regDept" class="form-control" placeholder="e.g. Computer Science" required>
+                                    </div>
+                                    <div class="col-md-6 mb-2">
+                                        <label class="form-label small fw-semibold">Year of Study *</label>
+                                        <select id="regYear" class="form-select" required>
+                                            <option value="1">1st Year</option>
+                                            <option value="2">2nd Year</option>
+                                            <option value="3">3rd Year</option>
+                                            <option value="4">4th Year</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 mb-2">
+                                        <label class="form-label small fw-semibold">Email Address *</label>
+                                        <input type="email" id="regEmail" class="form-control" placeholder="ananya@example.com" required>
+                                    </div>
+                                    <div class="col-md-6 mb-2">
+                                        <label class="form-label small fw-semibold">Mobile Number (10 digits) *</label>
+                                        <input type="tel" id="regMobile" class="form-control" pattern="[0-9]{10}" placeholder="9876543210" required>
+                                    </div>
+                                    <div class="col-md-6 mb-2">
+                                        <label class="form-label small fw-semibold">Guardian Contact *</label>
+                                        <input type="tel" id="regGuardian" class="form-control" pattern="[0-9]{10}" placeholder="9876543211" required>
+                                    </div>
+                                    <div class="col-12 mb-3">
+                                        <label class="form-label small fw-semibold">Password (min 8 chars, letter + digit) *</label>
+                                        <input type="password" id="regPassword" class="form-control" placeholder="••••••••" required>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-success w-100 py-2 fw-semibold">
+                                    <i class="bi bi-person-check me-1"></i> Submit Registration
+                                </button>
+                                <div class="form-text text-center mt-2 small">
+                                    Per institution policy (BR-04), accounts require Administrator approval before first login.
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Side: Public Notice Board & Features Info -->
+            <div class="col-lg-5">
+                <div class="card p-4 h-100">
+                    <div class="d-flex align-items-center justify-content-between mb-3 border-bottom pb-2">
+                        <h5 class="fw-bold mb-0 text-primary"><i class="bi bi-megaphone me-2"></i>Campus Notices</h5>
+                        <span class="badge bg-primary rounded-pill" id="noticeCount">0</span>
+                    </div>
+                    <div id="noticeList" class="flex-grow-1 overflow-auto" style="max-height: 420px;">
+                        <div class="text-center text-muted py-4">Loading notices...</div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function fillLogin(identifier, pass) {
+            document.getElementById('loginIdentifier').value = identifier;
+            document.getElementById('loginPassword').value = pass;
+        }
+
+        // Check if already authenticated
+        fetch('/api/auth/me')
+            .then(res => res.json())
+            .then(data => {
+                if (data.authenticated) {
+                    if (data.user.role === 'admin') window.location.href = '/admin.html';
+                    else if (data.user.role === 'warden') window.location.href = '/warden.html';
+                    else if (data.user.role === 'student') window.location.href = '/student.html';
+                }
+            }).catch(() => {});
+
+        // Handle Login
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const alertBox = document.getElementById('loginAlert');
+            alertBox.className = 'alert d-none';
+
+            const identifier = document.getElementById('loginIdentifier').value.trim();
+            const password = document.getElementById('loginPassword').value;
+
+            try {
+                const res = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ identifier, password })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    alertBox.className = 'alert alert-danger';
+                    alertBox.textContent = data.error || 'Login failed';
+                    return;
+                }
+                window.location.href = data.redirect;
+            } catch (err) {
+                alertBox.className = 'alert alert-danger';
+                alertBox.textContent = 'Server connection error: ' + err.message;
+            }
+        });
+
+        // Handle Registration
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const alertBox = document.getElementById('registerAlert');
+            alertBox.className = 'alert d-none';
+
+            const payload = {
+                enrollment_no: document.getElementById('regEnrollment').value.trim(),
+                full_name: document.getElementById('regName').value.trim(),
+                gender: document.getElementById('regGender').value,
+                department: document.getElementById('regDept').value.trim(),
+                year_of_study: document.getElementById('regYear').value,
+                email: document.getElementById('regEmail').value.trim(),
+                mobile: document.getElementById('regMobile').value.trim(),
+                guardian_contact: document.getElementById('regGuardian').value.trim(),
+                password: document.getElementById('regPassword').value
+            };
+
+            try {
+                const res = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    alertBox.className = 'alert alert-danger';
+                    alertBox.textContent = data.error || 'Registration failed';
+                    return;
+                }
+                alertBox.className = 'alert alert-success';
+                alertBox.textContent = data.message;
+                document.getElementById('registerForm').reset();
+            } catch (err) {
+                alertBox.className = 'alert alert-danger';
+                alertBox.textContent = 'Server connection error: ' + err.message;
+            }
+        });
+
+        // Load Notices
+        async function loadNotices() {
+            try {
+                const res = await fetch('/api/notices');
+                const notices = await res.json();
+                const list = document.getElementById('noticeList');
+                document.getElementById('noticeCount').textContent = notices.length;
+                if (!notices || notices.length === 0) {
+                    list.innerHTML = '<div class="text-center text-muted py-3">No active announcements.</div>';
+                    return;
+                }
+                list.innerHTML = notices.map(n => `
+                    <div class="card bg-light mb-3 p-3 border-0 shadow-none">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <h6 class="fw-bold mb-0 text-dark">${n.title}</h6>
+                            <span class="badge bg-secondary">${n.hostel_name || 'All Hostels'}</span>
+                        </div>
+                        <p class="text-muted small mb-2">${n.body}</p>
+                        <div class="d-flex justify-content-between text-muted" style="font-size: 0.75rem;">
+                            <span><i class="bi bi-clock me-1"></i>${new Date(n.created_at).toLocaleDateString()}</span>
+                            <span>By: ${n.author_email}</span>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                document.getElementById('noticeList').innerHTML = '<div class="text-danger small">Failed to load notices</div>';
+            }
+        }
+        loadNotices();
+    </script>
+</body>
+</html>

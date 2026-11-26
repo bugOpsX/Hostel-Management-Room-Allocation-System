@@ -1,0 +1,25 @@
+function requireAuth(req, res, next) {
+    if (!req.session || !req.session.user) {
+        return res.status(401).json({ error: 'Authentication required' });
+    }
+    next();
+}
+
+function requireRole(...roles) {
+    return (req, res, next) => {
+        if (!req.session || !req.session.user) {
+            return res.status(401).json({ error: 'Authentication required' });
+        }
+        if (!roles.includes(req.session.user.role)) {
+            return res.status(403).json({ error: 'Access forbidden: Insufficient permissions' });
+        }
+        next();
+    };
+}
+
+module.exports = {
+    requireAuth,
+    requireAdmin: requireRole('admin'),
+    requireWarden: requireRole('warden', 'admin'),
+    requireStudent: requireRole('student')
+};

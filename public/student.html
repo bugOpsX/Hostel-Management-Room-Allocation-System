@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Portal - HMRAS</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        body { background-color: #f8f9fa; font-family: system-ui, -apple-system, sans-serif; }
+        .allocation-banner { background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%); color: white; border-radius: 12px; }
+        .nav-pills .nav-link { border-radius: 8px; font-weight: 500; color: #495057; }
+        .nav-pills .nav-link.active { background-color: #0d6efd; color: white; }
+        .table-responsive { background: white; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+        @media print {
+            body * { visibility: hidden; }
+            #receiptPrintArea, #receiptPrintArea * { visibility: visible; }
+            #receiptPrintArea { position: absolute; left: 0; top: 0; width: 100%; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Top Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark px-3 py-2 shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand d-flex align-items-center" href="/student.html">
+                <i class="bi bi-mortarboard me-2 text-primary"></i> HMRAS <span class="badge bg-primary ms-2">Student Portal</span>
+            </a>
+            <div class="d-flex align-items-center gap-3">
+                <span class="text-light small d-none d-md-inline" id="studentHeaderInfo">Loading...</span>
+                <button class="btn btn-outline-light btn-sm" onclick="logout()"><i class="bi bi-box-arrow-right me-1"></i>Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid px-4 py-4">
+
+        <!-- Allocation Status Banner -->
+        <div class="card allocation-banner p-4 mb-4 shadow-sm border-0" id="allocationBanner">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div>
+                    <span class="badge bg-light text-primary mb-2 px-3 py-1 fw-bold"><i class="bi bi-house-door me-1"></i>Current Accommodation</span>
+                    <h3 class="fw-bold mb-1" id="bannerHostelName">Loading Allocation...</h3>
+                    <p class="mb-0 opacity-75" id="bannerRoomDetails">Checking room details...</p>
+                </div>
+                <div class="text-end" id="bannerBedBadge">
+                    <span class="badge bg-success fs-5 px-3 py-2">Bed Allocated</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Student Tabs -->
+        <div class="card border-0 shadow-sm p-3">
+            <ul class="nav nav-pills mb-4 flex-wrap gap-2" role="tablist">
+                <li class="nav-item">
+                    <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tabFees"><i class="bi bi-cash-stack me-1"></i> My Hostel Fees</button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabComplaints"><i class="bi bi-tools me-1"></i> Maintenance Complaints</button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabRequests"><i class="bi bi-arrow-left-right me-1"></i> Room Transfer / Vacate</button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabNotices"><i class="bi bi-megaphone me-1"></i> Hostel Notices</button>
+                </li>
+            </ul>
+
+            <div class="tab-content">
+                
+                <!-- 1. FEES TAB -->
+                <div class="tab-pane fade show active" id="tabFees">
+                    <h5 class="fw-bold mb-3"><i class="bi bi-cash-stack me-2"></i>Fee Invoices & Receipts</h5>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Term / Academic Period</th>
+                                    <th>Amount Payable</th>
+                                    <th>Due Date</th>
+                                    <th>Payment Status</th>
+                                    <th>Transaction Ref</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="studentFeesTableBody">
+                                <tr><td colspan="6" class="text-center py-3 text-muted">Loading fee records...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 2. COMPLAINTS TAB -->
+                <div class="tab-pane fade" id="tabComplaints">
+                    <div class="row g-4">
+                        <div class="col-lg-4">
+                            <div class="card p-3 border bg-light">
+                                <h6 class="fw-bold text-primary mb-3"><i class="bi bi-plus-circle me-1"></i> Log Maintenance Complaint</h6>
+                                <form id="addComplaintForm">
+                                    <div class="mb-3">
+                                        <label class="form-label small fw-semibold">Category *</label>
+                                        <select id="compCategory" class="form-select" required>
+                                            <option value="Electrical">Electrical (Fan, Light, Switch)</option>
+                                            <option value="Plumbing">Plumbing (Tap, Leak, Drain)</option>
+                                            <option value="Furniture">Furniture (Bed, Table, Chair)</option>
+                                            <option value="Cleaning">Cleaning & Sanitation</option>
+                                            <option value="Internet">Internet / WiFi</option>
+                                            <option value="Security">Security</option>
+                                            <option value="Other">Other</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label small fw-semibold">Description (min 10 characters) *</label>
+                                        <textarea id="compDesc" class="form-control" rows="4" placeholder="Describe the issue clearly..." required minlength="10"></textarea>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold">
+                                        <i class="bi bi-send me-1"></i> Submit to Hostel Warden
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+
+                        <div class="col-lg-8">
+                            <h6 class="fw-bold mb-3"><i class="bi bi-list-check me-1"></i> My Filed Complaints</h6>
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Date</th>
+                                            <th>Category</th>
+                                            <th>Description</th>
+                                            <th>Priority</th>
+                                            <th>Status</th>
+                                            <th>Warden Remarks</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="studentComplaintsTableBody">
+                                        <tr><td colspan="7" class="text-center py-3 text-muted">Loading complaints...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. REQUESTS TAB -->
+                <div class="tab-pane fade" id="tabRequests">
+                    <div class="row g-4">
+                        <div class="col-lg-5">
+                            <div class="card p-3 border bg-light">
+                                <h6 class="fw-bold text-primary mb-3"><i class="bi bi-pencil-square me-1"></i> Submit Room Request</h6>
+                                <form id="addRequestForm">
+                                    <div class="mb-3">
+                                        <label class="form-label small fw-semibold">Request Type *</label>
+                                        <select id="reqType" class="form-select" required onchange="toggleTransferOptions()">
+                                            <option value="Transfer">Room Transfer (Change Room)</option>
+                                            <option value="Vacate">Vacate Hostel (End Stay)</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-3" id="preferredHostelDiv">
+                                        <label class="form-label small fw-semibold">Preferred Hostel (Optional)</label>
+                                        <select id="reqPreferredHostel" class="form-select">
+                                            <option value="">No preference / Same hostel</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label small fw-semibold">Reason for Request *</label>
+                                        <textarea id="reqReason" class="form-control" rows="3" placeholder="Provide reason..." required></textarea>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold">
+                                        <i class="bi bi-send me-1"></i> Submit Request
+                                    </button>
+                                    <div class="form-text small mt-2">
+                                        Note: Vacating clearance requires all outstanding hostel fees to be cleared (BR-06).
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
+                        <div class="col-lg-7">
+                            <h6 class="fw-bold mb-3"><i class="bi bi-clock-history me-1"></i> Request Status History</h6>
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Type</th>
+                                            <th>Reason</th>
+                                            <th>Warden Recommendation</th>
+                                            <th>Admin Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="studentRequestsTableBody">
+                                        <tr><td colspan="5" class="text-center py-3 text-muted">Loading requests...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. NOTICES TAB -->
+                <div class="tab-pane fade" id="tabNotices">
+                    <h5 class="fw-bold mb-3"><i class="bi bi-megaphone me-2"></i>Hostel Announcements</h5>
+                    <div id="studentNoticesList" class="row g-3">
+                        <div class="text-center py-3 text-muted">Loading notices...</div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment & Receipt Modal -->
+    <div class="modal fade" id="paymentModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-credit-card me-2"></i>Online Fee Payment</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="card p-3 mb-3 bg-light border-0">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">Fee Invoice ID:</span>
+                            <span class="fw-semibold" id="modalFeeId">#</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">Academic Term:</span>
+                            <span class="fw-semibold" id="modalFeeTerm">Fall 2026</span>
+                        </div>
+                        <div class="d-flex justify-content-between fs-5 border-top pt-2">
+                            <span class="fw-bold">Total Amount:</span>
+                            <span class="fw-bold text-success" id="modalFeeAmount">₹25,000</span>
+                        </div>
+                    </div>
+                    <p class="text-muted small mb-0">
+                        <i class="bi bi-shield-check text-success me-1"></i> Encrypted 128-bit simulated transaction compliant with SRS Section 3.3.2.
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-success" id="confirmPayBtn" onclick="executeOnlinePayment()">
+                        <i class="bi bi-lock me-1"></i> Pay Now
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Printable Receipt Modal -->
+    <div class="modal fade" id="receiptModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">Official Fee Receipt</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="receiptPrintArea">
+                    <div class="text-center pb-3 border-bottom mb-3">
+                        <h4 class="fw-bold mb-0">Marwadi University</h4>
+                        <div class="text-muted small">Hostel Administration & Finance Department</div>
+                        <div class="badge bg-success mt-2">PAYMENT CONFIRMED</div>
+                    </div>
+                    <div class="row g-2 mb-3 small">
+                        <div class="col-6"><strong>Receipt Ref:</strong> <span id="recTxnRef"></span></div>
+                        <div class="col-6 text-end"><strong>Date:</strong> <span id="recDate"></span></div>
+                        <div class="col-6"><strong>Student:</strong> <span id="recStudentName"></span></div>
+                        <div class="col-6 text-end"><strong>Roll No:</strong> <span id="recRoll"></span></div>
+                        <div class="col-12"><strong>Hostel / Room:</strong> <span id="recRoom"></span></div>
+                    </div>
+                    <table class="table table-bordered mb-3">
+                        <thead class="table-light">
+                            <tr><th>Description</th><th class="text-end">Amount</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Hostel Accommodation Fee (<span id="recTerm"></span>)</td>
+                                <td class="text-end fw-bold" id="recAmount"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div class="text-center text-muted small mt-4">
+                        Computer generated receipt. Valid for official records.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" onclick="window.print()">
+                        <i class="bi bi-printer me-1"></i> Print Receipt
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentStudent = null;
+        let activeFeeToPay = null;
+
+        async function init() {
+            try {
+                const res = await fetch('/api/auth/me');
+                const data = await res.json();
+                if (!data.authenticated || data.user.role !== 'student') {
+                    window.location.href = '/index.html';
+                    return;
+                }
+            } catch {
+                window.location.href = '/index.html';
+                return;
+            }
+
+            await loadStudentDashboard();
+            await loadHostelsForTransfer();
+        }
+
+        async function logout() {
+            await fetch('/api/auth/logout', { method: 'POST' });
+            window.location.href = '/index.html';
+        }
+
+        async function loadStudentDashboard() {
+            const res = await fetch('/api/student/dashboard');
+            const data = await res.json();
+            currentStudent = data.profile;
+
+            document.getElementById('studentHeaderInfo').innerHTML = `
+                <i class="bi bi-person-fill me-1"></i>${data.profile.full_name} (${data.profile.enrollment_no}) | ${data.profile.department}
+            `;
+
+            // Allocation Banner
+            const banner = document.getElementById('allocationBanner');
+            if (data.allocation) {
+                document.getElementById('bannerHostelName').textContent = `${data.allocation.hostel_name}`;
+                document.getElementById('bannerRoomDetails').textContent = `Room ${data.allocation.room_no} (${data.allocation.room_type}) • Floor ${data.allocation.floor} • Bed: ${data.allocation.bed_no} • Since: ${new Date(data.allocation.start_date).toLocaleDateString()}`;
+                document.getElementById('bannerBedBadge').innerHTML = `<span class="badge bg-success fs-5 px-3 py-2"><i class="bi bi-check-circle me-1"></i>Bed ${data.allocation.bed_no}</span>`;
+            } else {
+                banner.className = 'card bg-secondary text-white p-4 mb-4 shadow-sm border-0';
+                document.getElementById('bannerHostelName').textContent = 'No Bed Allocated Yet';
+                document.getElementById('bannerRoomDetails').textContent = 'Your application has been verified. The Hostel Administrator will assign your room soon.';
+                document.getElementById('bannerBedBadge').innerHTML = '<span class="badge bg-light text-dark fs-6 px-3 py-2">Pending Allocation</span>';
+            }
+
+            // Fees Table
+            const feesTbody = document.getElementById('studentFeesTableBody');
+            if (!data.fees || data.fees.length === 0) {
+                feesTbody.innerHTML = '<tr><td colspan="6" class="text-center py-3 text-muted">No fee records found.</td></tr>';
+            } else {
+                feesTbody.innerHTML = data.fees.map(f => `
+                    <tr>
+                        <td class="fw-semibold">${f.term}</td>
+                        <td class="fw-bold">₹${f.amount}</td>
+                        <td class="small">${f.due_date}</td>
+                        <td>
+                            <span class="badge ${f.status === 'Paid' ? 'bg-success' : 'bg-danger'}">
+                                ${f.status}
+                            </span>
+                        </td>
+                        <td class="small">${f.transaction_ref || '—'}</td>
+                        <td>
+                            ${f.status !== 'Paid' ? `
+                                <button class="btn btn-sm btn-success py-0 px-3" onclick="openPaymentModal(${f.id}, '${f.term}', ${f.amount})">
+                                    <i class="bi bi-credit-card me-1"></i> Pay Online
+                                </button>
+                            ` : `
+                                <button class="btn btn-sm btn-outline-primary py-0 px-2" onclick="showReceipt('${f.transaction_ref}', '${f.term}', ${f.amount}, '${f.paid_at}')">
+                                    <i class="bi bi-receipt me-1"></i> Receipt
+                                </button>
+                            `}
+                        </td>
+                    </tr>
+                `).join('');
+            }
+
+            // Complaints Table
+            const compTbody = document.getElementById('studentComplaintsTableBody');
+            if (!data.complaints || data.complaints.length === 0) {
+                compTbody.innerHTML = '<tr><td colspan="7" class="text-center py-3 text-muted">You have not submitted any complaints.</td></tr>';
+            } else {
+                compTbody.innerHTML = data.complaints.map(c => `
+                    <tr>
+                        <td>#${c.id}</td>
+                        <td class="small">${new Date(c.created_at).toLocaleDateString()}</td>
+                        <td><span class="badge bg-light text-dark border">${c.category}</span></td>
+                        <td class="small">${c.description}</td>
+                        <td>
+                            <span class="badge ${c.priority === 'High' ? 'bg-danger' : (c.priority === 'Medium' ? 'bg-warning text-dark' : 'bg-info text-dark')}">
+                                ${c.priority}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge ${c.status === 'Resolved' ? 'bg-success' : (c.status === 'In Progress' ? 'bg-primary' : 'bg-secondary')}">
+                                ${c.status}
+                            </span>
+                        </td>
+                        <td class="small text-muted">${c.remarks || '—'}</td>
+                    </tr>
+                `).join('');
+            }
+
+            // Requests Table
+            const reqTbody = document.getElementById('studentRequestsTableBody');
+            if (!data.requests || data.requests.length === 0) {
+                reqTbody.innerHTML = '<tr><td colspan="5" class="text-center py-3 text-muted">No transfer or vacating requests submitted.</td></tr>';
+            } else {
+                reqTbody.innerHTML = data.requests.map(r => `
+                    <tr>
+                        <td class="small">${new Date(r.created_at).toLocaleDateString()}</td>
+                        <td><span class="badge ${r.request_type === 'Transfer' ? 'bg-primary' : 'bg-warning text-dark'}">${r.request_type}</span></td>
+                        <td class="small">${r.reason}</td>
+                        <td>
+                            <span class="badge ${r.warden_recommendation === 'Recommend' ? 'bg-success' : (r.warden_recommendation === 'Not Recommend' ? 'bg-danger' : 'bg-secondary')}">
+                                ${r.warden_recommendation || 'Pending'}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge ${r.status === 'Approved' ? 'bg-success' : (r.status === 'Rejected' ? 'bg-danger' : 'bg-secondary')}">
+                                ${r.status}
+                            </span>
+                            ${r.admin_remarks ? `<div class="small text-muted">${r.admin_remarks}</div>` : ''}
+                        </td>
+                    </tr>
+                `).join('');
+            }
+
+            // Notices
+            const noticesList = document.getElementById('studentNoticesList');
+            if (!data.notices || data.notices.length === 0) {
+                noticesList.innerHTML = '<div class="text-center py-3 text-muted">No active notices.</div>';
+            } else {
+                noticesList.innerHTML = data.notices.map(n => `
+                    <div class="col-md-6">
+                        <div class="card p-3 border shadow-sm h-100">
+                            <h6 class="fw-bold mb-1 text-primary">${n.title}</h6>
+                            <p class="small text-muted mb-2">${n.body}</p>
+                            <div class="d-flex justify-content-between small text-muted mt-auto pt-2 border-top">
+                                <span><i class="bi bi-clock me-1"></i>${new Date(n.created_at).toLocaleDateString()}</span>
+                                <span>Hostel Office</span>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        async function loadHostelsForTransfer() {
+            const res = await fetch('/api/notices'); // general fetch or hostels list
+            const hRes = await fetch('/api/admin/hostels');
+            if (hRes.ok) {
+                const hostels = await hRes.json();
+                document.getElementById('reqPreferredHostel').innerHTML = '<option value="">No preference</option>' + hostels.map(h => `<option value="${h.id}">${h.name}</option>`).join('');
+            }
+        }
+
+        function toggleTransferOptions() {
+            const isTransfer = document.getElementById('reqType').value === 'Transfer';
+            document.getElementById('preferredHostelDiv').style.display = isTransfer ? 'block' : 'none';
+        }
+
+        // Handle Complaint Submission
+        document.getElementById('addComplaintForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = {
+                category: document.getElementById('compCategory').value,
+                description: document.getElementById('compDesc').value
+            };
+            const res = await fetch('/api/student/complaints', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (res.ok) {
+                alert(data.message);
+                document.getElementById('addComplaintForm').reset();
+                loadStudentDashboard();
+            } else {
+                alert(data.error);
+            }
+        });
+
+        // Handle Request Submission
+        document.getElementById('addRequestForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = {
+                request_type: document.getElementById('reqType').value,
+                preferred_hostel_id: document.getElementById('reqPreferredHostel').value || null,
+                reason: document.getElementById('reqReason').value
+            };
+            const res = await fetch('/api/student/requests', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (res.ok) {
+                alert(data.message);
+                document.getElementById('addRequestForm').reset();
+                loadStudentDashboard();
+            } else {
+                alert(data.error);
+            }
+        });
+
+        // Fee Payment
+        function openPaymentModal(feeId, term, amount) {
+            activeFeeToPay = feeId;
+            document.getElementById('modalFeeId').textContent = '#' + feeId;
+            document.getElementById('modalFeeTerm').textContent = term;
+            document.getElementById('modalFeeAmount').textContent = '₹' + amount;
+            new bootstrap.Modal(document.getElementById('paymentModal')).show();
+        }
+
+        async function executeOnlinePayment() {
+            const btn = document.getElementById('confirmPayBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Processing...';
+
+            try {
+                const res = await fetch(`/api/student/fees/${activeFeeToPay}/pay`, { method: 'POST' });
+                const data = await res.json();
+                if (res.ok) {
+                    bootstrap.Modal.getInstance(document.getElementById('paymentModal')).hide();
+                    alert(data.message);
+                    loadStudentDashboard();
+                } else {
+                    alert('Payment error: ' + data.error);
+                }
+            } catch (err) {
+                alert('Connection error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-lock me-1"></i> Pay Now';
+            }
+        }
+
+        function showReceipt(ref, term, amount, paidAt) {
+            document.getElementById('recTxnRef').textContent = ref;
+            document.getElementById('recDate').textContent = paidAt ? new Date(paidAt).toLocaleDateString() : new Date().toLocaleDateString();
+            document.getElementById('recStudentName').textContent = currentStudent.full_name;
+            document.getElementById('recRoll').textContent = currentStudent.enrollment_no;
+            document.getElementById('recRoom').textContent = document.getElementById('bannerRoomDetails').textContent;
+            document.getElementById('recTerm').textContent = term;
+            document.getElementById('recAmount').textContent = '₹' + amount;
+            new bootstrap.Modal(document.getElementById('receiptModal')).show();
+        }
+
+        init();
+    </script>
+</body>
+</html>
