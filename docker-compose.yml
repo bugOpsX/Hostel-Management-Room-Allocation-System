@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  hmras-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hmras-hostel-system
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - SESSION_SECRET=c9f7a8b3e2d14059a76b8c4d1e2f3a4b5c6d7e8f90123456789abcdef0123456
+      - DB_PATH=/app/data/hostel.db
+      - BACKUP_DIR=/app/backups
+      - COOKIE_SECURE=false # Set to true when terminating SSL via Nginx / Cloudflare
+    volumes:
+      - hmras-db-data:/app/data
+      - hmras-backups:/app/backups
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  hmras-db-data:
+    name: hmras-db-data
+  hmras-backups:
+    name: hmras-backups

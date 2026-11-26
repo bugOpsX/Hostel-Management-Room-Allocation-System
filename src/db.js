@@ -2,12 +2,19 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 
-const dbPath = path.join(__dirname, '..', 'hostel.db');
+const dbPath = process.env.DB_PATH || path.join(__dirname, '..', 'hostel.db');
+const dbDir = path.dirname(dbPath);
+if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+}
+
 const db = new Database(dbPath);
 
-// Enable Foreign Keys and WAL Mode for high performance & integrity
+// Enable Foreign Keys, WAL Mode, and concurrency pragmas for production
 db.pragma('foreign_keys = ON');
 db.pragma('journal_mode = WAL');
+db.pragma('synchronous = NORMAL');
+db.pragma('busy_timeout = 5000');
 
 // Initialize schema
 const schemaPath = path.join(__dirname, 'schema.sql');

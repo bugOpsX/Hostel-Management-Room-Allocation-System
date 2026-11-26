@@ -1,0 +1,27 @@
+[Unit]
+Description=HMRAS Hostel Management & Resource Allocation System
+Documentation=https://github.com/your-org/hostel-management
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/hostel-management
+ExecStart=/usr/bin/node src/server.js
+Restart=always
+RestartSec=10
+EnvironmentFile=/var/www/hostel-management/.env
+Environment=NODE_ENV=production
+LimitNOFILE=65536
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=hmras-server
+
+# Hardening measures
+ProtectSystem=full
+ProtectHome=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

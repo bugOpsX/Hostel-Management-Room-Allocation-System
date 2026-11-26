@@ -91,7 +91,15 @@ function startCronDaemon(intervalMs = 60 * 60 * 1000) {
     return timer;
 }
 
+function stopCronDaemon(timer) {
+    if (timer) {
+        clearInterval(timer);
+        console.log('[Cron Daemon] Background maintenance daemon stopped.');
+    }
+}
+
 module.exports = {
     runDailyMaintenanceTasks,
-    startCronDaemon
+    startCronDaemon,
+    stopCronDaemon
 };

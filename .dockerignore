@@ -1,0 +1,16 @@
+node_modules
+.git
+.gitignore
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+backups
+logs
+.env
+.env.local
+.env.*.local
+test
+.vscode
+.idea
