@@ -55,6 +55,11 @@ router.get('/dashboard', (req, res) => {
             WHERE hostel_id IS NULL OR hostel_id = ?
         `).get(hostel.id).count;
 
+        const unpaidPenalties = db.prepare(`
+            SELECT COUNT(*) as count FROM penalties
+            WHERE hostel_id = ? AND status = 'Unpaid'
+        `).get(hostel.id).count;
+
         res.json({
             assigned: true,
             hostel,
@@ -66,13 +71,15 @@ router.get('/dashboard', (req, res) => {
             pendingRequests,
             activeVisitors,
             noticesCount,
+            unpaidPenalties,
             badges: {
                 openComplaints: complaintStats.total_open || 0,
                 escalatedComplaints: complaintStats.escalated || 0,
                 pendingRequests,
                 activeVisitors,
                 noticesCount,
-                totalAlerts: (complaintStats.total_open || 0) + pendingRequests + activeVisitors
+                unpaidPenalties,
+                totalAlerts: (complaintStats.total_open || 0) + pendingRequests + activeVisitors + unpaidPenalties
             }
         });
     } catch (err) {
@@ -349,6 +356,167 @@ router.get('/activity-logs', (req, res) => {
         `).all(hostel.id, req.session.user.id);
 
         res.json(logs);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 6. Warden Penalties & Fines Management
+router.get('/penalties', (req, res) => {
+    try {
+        const hostel = getWardenHostel(req.session.user.id);
+        if (!hostel) return res.json([]);
+
+        const penalties = db.prepare(`
+            SELECT 
+                p.*,
+                s.full_name as student_name, s.enrollment_no, s.mobile,
+                r.room_no, b.bed_no,
+                u.email as imposed_by_email,
+                w.email as waived_by_email
+            FROM penalties p
+            JOIN students s ON p.student_id = s.id
+            LEFT JOIN allocations a ON p.allocation_id = a.id
+            LEFT JOIN beds b ON a.bed_id = b.id
+            LEFT JOIN rooms r ON b.room_id = r.id
+            LEFT JOIN users u ON p.imposed_by = u.id
+            LEFT JOIN users w ON p.waived_by = w.id
+            WHERE p.hostel_id = ? OR r.hostel_id = ?
+            ORDER BY p.id DESC
+        `).all(hostel.id, hostel.id);
+
+        res.json(penalties);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/penalties', (req, res) => {
+    const { student_id, category, title, description, amount, due_date } = req.body;
+    if (!student_id || !category || !title || !amount || !due_date) {
+        return res.status(400).json({ error: 'All fields are required.' });
+    }
+
+    try {
+        const hostel = getWardenHostel(req.session.user.id);
+        if (!hostel) return res.status(400).json({ error: 'No hostel assigned.' });
+
+        const resident = db.prepare(`
+            SELECT s.id, s.full_name, s.enrollment_no, a.id as allocation_id
+            FROM students s
+            JOIN allocations a ON s.id = a.student_id
+            JOIN beds b ON a.bed_id = b.id
+            JOIN rooms r ON b.room_id = r.id
+            WHERE s.id = ? AND r.hostel_id = ? AND a.status = 'Active'
+        `).get(student_id, hostel.id);
+
+        if (!resident) {
+            return res.status(400).json({ error: 'Selected student does not have an active bed in this hostel.' });
+        }
+
+        const ins = db.prepare(`
+            INSERT INTO penalties (student_id, allocation_id, hostel_id, category, title, description, amount, due_date, status, imposed_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Unpaid', ?)
+        `).run(
+            student_id,
+            resident.allocation_id,
+            hostel.id,
+            category,
+            title.trim(),
+            (description || '').trim(),
+            parseFloat(amount),
+            due_date,
+            req.session.user.id
+        );
+
+        logAudit(
+            req.session.user.id,
+            req.session.user.email,
+            'PENALTY_LEVIED',
+            `Warden levied ₹${amount} penalty (${category}: ${title.trim()}) on ${resident.full_name} (${resident.enrollment_no}).`,
+            student_id,
+            hostel.id
+        );
+
+        res.json({ success: true, penaltyId: ins.lastInsertRowid, message: `Penalty of ₹${amount} successfully applied to ${resident.full_name}.` });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/penalties/:id/record-payment', (req, res) => {
+    const { amount, mode, transaction_ref } = req.body;
+    try {
+        const hostel = getWardenHostel(req.session.user.id);
+        const penalty = db.prepare(`
+            SELECT p.*, s.full_name
+            FROM penalties p
+            JOIN students s ON p.student_id = s.id
+            WHERE p.id = ? AND p.hostel_id = ?
+        `).get(req.params.id, hostel.id);
+
+        if (!penalty) return res.status(404).json({ error: 'Penalty record not found in this hostel.' });
+        if (penalty.status === 'Paid') return res.status(400).json({ error: 'Penalty has already been paid.' });
+        if (penalty.status === 'Waived') return res.status(400).json({ error: 'Penalty has been waived.' });
+
+        const payAmount = amount ? parseFloat(amount) : penalty.amount;
+        const ref = transaction_ref || `OFFLINE-WARDEN-${Date.now()}`;
+
+        db.prepare(`
+            UPDATE penalties 
+            SET status = 'Paid', paid_at = CURRENT_TIMESTAMP, payment_mode = ?, transaction_ref = ?
+            WHERE id = ?
+        `).run(mode || 'Cash', ref, penalty.id);
+
+        logAudit(
+            req.session.user.id,
+            req.session.user.email,
+            'PENALTY_PAID_RECORD',
+            `Warden recorded ₹${payAmount} payment (${mode || 'Cash'}) for Penalty #${penalty.id} for ${penalty.full_name}.`,
+            penalty.student_id,
+            hostel.id
+        );
+
+        res.json({ success: true, message: 'Penalty payment recorded successfully.' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/penalties/:id/waive', (req, res) => {
+    const { reason } = req.body;
+    if (!reason || !reason.trim()) {
+        return res.status(400).json({ error: 'Reason for waiving is mandatory.' });
+    }
+
+    try {
+        const hostel = getWardenHostel(req.session.user.id);
+        const penalty = db.prepare(`
+            SELECT p.*, s.full_name 
+            FROM penalties p
+            JOIN students s ON p.student_id = s.id
+            WHERE p.id = ? AND p.hostel_id = ?
+        `).get(req.params.id, hostel.id);
+
+        if (!penalty) return res.status(404).json({ error: 'Penalty record not found in this hostel.' });
+        if (penalty.status !== 'Unpaid') return res.status(400).json({ error: `Cannot waive: Penalty is already ${penalty.status}.` });
+
+        db.prepare(`
+            UPDATE penalties 
+            SET status = 'Waived', waived_by = ?, waive_reason = ?
+            WHERE id = ?
+        `).run(req.session.user.id, reason.trim(), penalty.id);
+
+        logAudit(
+            req.session.user.id,
+            req.session.user.email,
+            'PENALTY_WAIVED',
+            `Warden waived Penalty #${penalty.id} (₹${penalty.amount}, ${penalty.title}) for ${penalty.full_name}. Reason: "${reason.trim()}".`,
+            penalty.student_id,
+            hostel.id
+        );
+
+        res.json({ success: true, message: 'Penalty waived successfully.' });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

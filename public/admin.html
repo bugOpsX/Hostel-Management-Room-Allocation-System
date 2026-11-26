@@ -200,6 +200,12 @@
                     </button>
                 </li>
                 <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabPenalties">
+                        <i class="bi bi-exclamation-octagon me-1 text-danger"></i> Penalties & Fines 
+                        <span class="badge bg-danger rounded-pill ms-1" id="badgeUnpaidPenalties">0</span>
+                    </button>
+                </li>
+                <li class="nav-item">
                     <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabNotices">
                         <i class="bi bi-megaphone me-1"></i> Notices 
                         <span class="badge bg-info text-dark rounded-pill ms-1" id="badgeNotices">0</span>
@@ -477,6 +483,40 @@
                             </thead>
                             <tbody id="feesTableBody">
                                 <tr><td colspan="9" class="text-center py-3 text-muted">Loading fee records...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 6b. PENALTIES & FINES TAB -->
+                <div class="tab-pane fade" id="tabPenalties">
+                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                        <div>
+                            <h5 class="fw-bold mb-0"><i class="bi bi-exclamation-octagon text-danger me-2"></i>Student Penalties & Ad-hoc Charges</h5>
+                            <span class="text-muted small">Disciplinary fines, property damage charges, late return penalties, and lost asset replacements</span>
+                        </div>
+                        <button class="btn btn-danger btn-sm" onclick="openLevyPenaltyModal()">
+                            <i class="bi bi-plus-circle me-1"></i> Issue Fine / Penalty
+                        </button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Student</th>
+                                    <th>Hostel / Room</th>
+                                    <th>Category</th>
+                                    <th>Title / Reason</th>
+                                    <th>Amount</th>
+                                    <th>Due Date</th>
+                                    <th>Status</th>
+                                    <th>Imposed By</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminPenaltiesTableBody">
+                                <tr><td colspan="10" class="text-center py-3 text-muted">Loading penalties...</td></tr>
                             </tbody>
                         </table>
                     </div>

@@ -65,6 +65,15 @@ router.get('/dashboard', (req, res) => {
             LIMIT 10
         `).all(allocation ? allocation.hostel_id : -1);
 
+        // Penalties & Fines
+        const penalties = db.prepare(`
+            SELECT p.*, h.name as hostel_name
+            FROM penalties p
+            LEFT JOIN hostels h ON p.hostel_id = h.id
+            WHERE p.student_id = ?
+            ORDER BY p.id DESC
+        `).all(student.id);
+
         // Activity timeline logs specific to this student
         const activityLogs = db.prepare(`
             SELECT * FROM audit_logs 
@@ -75,6 +84,7 @@ router.get('/dashboard', (req, res) => {
 
         // Compute unread/pending badge counts
         const unpaidFeeCount = fees.filter(f => f.status !== 'Paid').length;
+        const unpaidPenaltyCount = penalties.filter(p => p.status === 'Unpaid').length;
         const openComplaintCount = complaints.filter(c => c.status !== 'Resolved').length;
         const pendingRequestCount = requests.filter(r => r.status === 'Pending').length;
 
@@ -82,16 +92,18 @@ router.get('/dashboard', (req, res) => {
             profile: student,
             allocation: allocation || null,
             fees,
+            penalties,
             complaints,
             requests,
             notices,
             activityLogs,
             badges: {
-                unpaidFees: unpaidFeeCount,
+                unpaidFees: unpaidFeeCount + unpaidPenaltyCount,
+                unpaidPenalties: unpaidPenaltyCount,
                 openComplaints: openComplaintCount,
                 pendingRequests: pendingRequestCount,
                 noticesCount: notices.length,
-                totalAlerts: unpaidFeeCount + openComplaintCount + (allocation ? 0 : 1)
+                totalAlerts: unpaidFeeCount + unpaidPenaltyCount + openComplaintCount + (allocation ? 0 : 1)
             }
         });
     } catch (err) {
@@ -238,6 +250,43 @@ router.post('/fees/:id/pay', (req, res) => {
             transactionRef: txnRef,
             amount: fee.amount,
             message: `Payment of ₹${fee.amount} completed successfully.`
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 5. Pay Penalty Online
+router.post('/penalties/:id/pay', (req, res) => {
+    try {
+        const student = getStudent(req.session.user.id);
+        const penalty = db.prepare('SELECT * FROM penalties WHERE id = ? AND student_id = ?').get(req.params.id, student.id);
+        if (!penalty) return res.status(404).json({ error: 'Penalty record not found' });
+        if (penalty.status === 'Paid') return res.status(400).json({ error: 'Penalty has already been paid.' });
+        if (penalty.status === 'Waived') return res.status(400).json({ error: 'Penalty has been waived.' });
+
+        const txnRef = `PEN-TXN-${Date.now()}`;
+
+        db.prepare(`
+            UPDATE penalties
+            SET status = 'Paid', paid_at = CURRENT_TIMESTAMP, payment_mode = 'Online', transaction_ref = ?
+            WHERE id = ?
+        `).run(txnRef, penalty.id);
+
+        logAudit(
+            req.session.user.id,
+            req.session.user.email,
+            'PENALTY_PAID_ONLINE',
+            `Student paid ₹${penalty.amount} online for Penalty #${penalty.id} (${penalty.title}) (Txn: ${txnRef}).`,
+            student.id,
+            penalty.hostel_id
+        );
+
+        res.json({
+            success: true,
+            transactionRef: txnRef,
+            amount: penalty.amount,
+            message: `Payment of ₹${penalty.amount} for "${penalty.title}" completed successfully.`
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
