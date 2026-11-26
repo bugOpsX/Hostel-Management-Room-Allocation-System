@@ -2,10 +2,10 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { requireStudent } = require('../middleware/auth');
+const { logAudit } = require('../utils/audit');
 
 router.use(requireStudent);
 
-// Helper to get logged in student
 function getStudent(userId) {
     return db.prepare('SELECT * FROM students WHERE user_id = ?').get(userId);
 }
@@ -16,7 +16,6 @@ router.get('/dashboard', (req, res) => {
         const student = getStudent(req.session.user.id);
         if (!student) return res.status(404).json({ error: 'Student record not found' });
 
-        // Current Active Allocation
         const allocation = db.prepare(`
             SELECT 
                 a.id as allocation_id, a.start_date, a.status as allocation_status,
@@ -30,7 +29,6 @@ router.get('/dashboard', (req, res) => {
             WHERE a.student_id = ? AND a.status = 'Active'
         `).get(student.id);
 
-        // Fees
         const fees = db.prepare(`
             SELECT 
                 f.*,
@@ -42,14 +40,12 @@ router.get('/dashboard', (req, res) => {
             ORDER BY f.id DESC
         `).all(student.id);
 
-        // Complaints
         const complaints = db.prepare(`
             SELECT * FROM complaints 
             WHERE student_id = ?
             ORDER BY created_at DESC
         `).all(student.id);
 
-        // Requests
         const requests = db.prepare(`
             SELECT 
                 req.*,
@@ -60,7 +56,6 @@ router.get('/dashboard', (req, res) => {
             ORDER BY req.created_at DESC
         `).all(student.id);
 
-        // Notices (general + hostel specific)
         const notices = db.prepare(`
             SELECT n.*, u.email as author_email
             FROM notices n
@@ -70,13 +65,34 @@ router.get('/dashboard', (req, res) => {
             LIMIT 10
         `).all(allocation ? allocation.hostel_id : -1);
 
+        // Activity timeline logs specific to this student
+        const activityLogs = db.prepare(`
+            SELECT * FROM audit_logs 
+            WHERE student_id = ? OR user_id = ?
+            ORDER BY created_at DESC
+            LIMIT 30
+        `).all(student.id, req.session.user.id);
+
+        // Compute unread/pending badge counts
+        const unpaidFeeCount = fees.filter(f => f.status !== 'Paid').length;
+        const openComplaintCount = complaints.filter(c => c.status !== 'Resolved').length;
+        const pendingRequestCount = requests.filter(r => r.status === 'Pending').length;
+
         res.json({
             profile: student,
             allocation: allocation || null,
             fees,
             complaints,
             requests,
-            notices
+            notices,
+            activityLogs,
+            badges: {
+                unpaidFees: unpaidFeeCount,
+                openComplaints: openComplaintCount,
+                pendingRequests: pendingRequestCount,
+                noticesCount: notices.length,
+                totalAlerts: unpaidFeeCount + openComplaintCount + (allocation ? 0 : 1)
+            }
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -95,21 +111,36 @@ router.post('/requests', (req, res) => {
 
     try {
         const student = getStudent(req.session.user.id);
-        const allocation = db.prepare("SELECT id FROM allocations WHERE student_id = ? AND status = 'Active'").get(student.id);
+        const allocation = db.prepare(`
+            SELECT a.id, r.hostel_id 
+            FROM allocations a
+            JOIN beds b ON a.bed_id = b.id
+            JOIN rooms r ON b.room_id = r.id
+            WHERE a.student_id = ? AND a.status = 'Active'
+        `).get(student.id);
+
         if (!allocation) {
             return res.status(400).json({ error: 'You do not have an active room allocation to request changes for.' });
         }
 
-        // Only 1 pending request allowed (FR-35)
         const pending = db.prepare("SELECT id FROM room_requests WHERE student_id = ? AND status = 'Pending'").get(student.id);
         if (pending) {
             return res.status(400).json({ error: 'You already have a pending request awaiting review (FR-35).' });
         }
 
-        db.prepare(`
+        const ins = db.prepare(`
             INSERT INTO room_requests (student_id, allocation_id, request_type, reason, preferred_hostel_id)
             VALUES (?, ?, ?, ?, ?)
         `).run(student.id, allocation.id, request_type, reason.trim(), preferred_hostel_id || null);
+
+        logAudit(
+            req.session.user.id,
+            req.session.user.email,
+            'ROOM_REQUEST_SUBMITTED',
+            `Student submitted ${request_type} request (#${ins.lastInsertRowid}): "${reason.trim()}"`,
+            student.id,
+            allocation.hostel_id
+        );
 
         res.json({ success: true, message: `${request_type} request submitted successfully.` });
     } catch (err) {
@@ -130,7 +161,6 @@ router.post('/complaints', (req, res) => {
 
     try {
         const student = getStudent(req.session.user.id);
-        // Ensure student has active allocation (FR-53)
         const alloc = db.prepare(`
             SELECT r.hostel_id 
             FROM allocations a
@@ -148,6 +178,15 @@ router.post('/complaints', (req, res) => {
             VALUES (?, ?, ?, ?, ?, 'Open')
         `).run(student.id, alloc.hostel_id, category, description.trim(), priority || 'Medium');
 
+        logAudit(
+            req.session.user.id,
+            req.session.user.email,
+            'COMPLAINT_FILED',
+            `Registered maintenance complaint #${compRes.lastInsertRowid} (${category}) with priority ${priority || 'Medium'}.`,
+            student.id,
+            alloc.hostel_id
+        );
+
         res.json({
             success: true,
             complaintId: compRes.lastInsertRowid,
@@ -163,15 +202,16 @@ router.post('/fees/:id/pay', (req, res) => {
     try {
         const student = getStudent(req.session.user.id);
         const fee = db.prepare(`
-            SELECT f.* FROM fees f
+            SELECT f.*, r.hostel_id FROM fees f
             JOIN allocations a ON f.allocation_id = a.id
+            JOIN beds b ON a.bed_id = b.id
+            JOIN rooms r ON b.room_id = r.id
             WHERE f.id = ? AND a.student_id = ?
         `).get(req.params.id, student.id);
 
         if (!fee) return res.status(404).json({ error: 'Fee record not found.' });
         if (fee.status === 'Paid') return res.status(400).json({ error: 'Fee has already been paid.' });
 
-        // Simulate secure payment gateway transaction
         const txnRef = `PAY-ONLINE-${Date.now()}-${Math.floor(Math.random() * 9000 + 1000)}`;
 
         const payTx = db.transaction(() => {
@@ -181,6 +221,15 @@ router.post('/fees/:id/pay', (req, res) => {
             `).run(fee.id, fee.amount, txnRef);
 
             db.prepare("UPDATE fees SET status = 'Paid' WHERE id = ?").run(fee.id);
+
+            logAudit(
+                req.session.user.id,
+                req.session.user.email,
+                'FEE_PAYMENT',
+                `Paid ₹${fee.amount} online for Fee #${fee.id} (${fee.term}) via gateway (Txn: ${txnRef}).`,
+                student.id,
+                fee.hostel_id
+            );
         });
 
         payTx();

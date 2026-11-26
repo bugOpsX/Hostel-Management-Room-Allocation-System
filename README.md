@@ -45,7 +45,16 @@ npm run seed
 * **Modern Stat Cards**: Live occupancy progress bars, real-time counters, and micro-hover lifts.
 * **Responsive Layouts**: Tested across phone, tablet, and desktop viewports.
 
-### 2. Waitlist Priority Queue (Phase 2 - FR-23, FR-26)
+### 2. Bulk Room Allocation Engine (FR-22, FR-23, FR-26)
+* **1-Click Batch Allocation**: Automatically processes all approved unallocated students in one shot.
+* **Configurable Priority Ordering (FR-23)**:
+  * Earliest registration timestamp first (FIFO per standard policy).
+  * Senior years first (4th Year ➔ 1st Year).
+  * Freshmen first (1st Year ➔ 4th Year).
+* **Automated Waitlist Fallback (FR-26)**: If all beds in matching gender hostels become full, excess students are automatically queued to the Waitlist with priority ranks.
+* **Detailed Batch Report**: Shows exactly which student was assigned which room/bed in the modal report.
+
+### 3. Automated Waitlist Priority Queue (FR-23, FR-26)
 * When all beds matching a student's gender are full during automated allocation, the student is automatically added to the **Waitlist Queue** with a priority rank (`#1`, `#2`, etc.).
 * Admin has a dedicated **Waitlist Queue** tab with a 1-click **"Allocate Bed"** button as soon as a bed opens.
 

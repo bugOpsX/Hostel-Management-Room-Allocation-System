@@ -29,7 +29,6 @@ router.get('/dashboard', (req, res) => {
             WHERE r.hostel_id = ?
         `).get(hostel.id);
 
-        // Open & Escalated complaints count (BR-10)
         const complaintStats = db.prepare(`
             SELECT 
                 COUNT(*) as total_open,
@@ -51,6 +50,11 @@ router.get('/dashboard', (req, res) => {
             WHERE hostel_id = ? AND out_time IS NULL
         `).get(hostel.id).count;
 
+        const noticesCount = db.prepare(`
+            SELECT COUNT(*) as count FROM notices
+            WHERE hostel_id IS NULL OR hostel_id = ?
+        `).get(hostel.id).count;
+
         res.json({
             assigned: true,
             hostel,
@@ -60,14 +64,23 @@ router.get('/dashboard', (req, res) => {
                 escalated: complaintStats.escalated || 0
             },
             pendingRequests,
-            activeVisitors
+            activeVisitors,
+            noticesCount,
+            badges: {
+                openComplaints: complaintStats.total_open || 0,
+                escalatedComplaints: complaintStats.escalated || 0,
+                pendingRequests,
+                activeVisitors,
+                noticesCount,
+                totalAlerts: (complaintStats.total_open || 0) + pendingRequests + activeVisitors
+            }
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// 2. Complaints Management (FR-54, BR-10: 72h escalated indicator)
+// 2. Complaints Management (FR-54, BR-10)
 router.get('/complaints', (req, res) => {
     try {
         const hostel = getWardenHostel(req.session.user.id);
@@ -116,7 +129,14 @@ router.post('/complaints/:id/update', (req, res) => {
             WHERE id = ?
         `).run(priority, status, assigned_to, remarks, resolvedAt, req.params.id);
 
-        logAudit(req.session.user.id, req.session.user.email, 'COMPLAINT_UPDATE', `Warden updated Complaint #${req.params.id}: Status=${status}, Priority=${priority}.`);
+        logAudit(
+            req.session.user.id,
+            req.session.user.email,
+            'COMPLAINT_UPDATE',
+            `Warden updated Complaint #${req.params.id}: Status=${status}, Priority=${priority}, Assigned=${assigned_to || 'None'}.`,
+            complaint.student_id,
+            hostel.id
+        );
 
         res.json({ success: true, message: 'Complaint updated successfully' });
     } catch (err) {
@@ -158,7 +178,7 @@ router.post('/requests/:id/recommend', (req, res) => {
     try {
         const hostel = getWardenHostel(req.session.user.id);
         const reqItem = db.prepare(`
-            SELECT req.id FROM room_requests req
+            SELECT req.id, req.student_id FROM room_requests req
             JOIN allocations a ON req.allocation_id = a.id
             JOIN beds b ON a.bed_id = b.id
             JOIN rooms r ON b.room_id = r.id
@@ -173,7 +193,14 @@ router.post('/requests/:id/recommend', (req, res) => {
             WHERE id = ?
         `).run(recommendation, remarks || '', req.params.id);
 
-        logAudit(req.session.user.id, req.session.user.email, 'WARDEN_RECOMMENDATION', `Warden set ${recommendation} for Request #${req.params.id}.`);
+        logAudit(
+            req.session.user.id,
+            req.session.user.email,
+            'WARDEN_RECOMMENDATION',
+            `Warden set "${recommendation}" for Request #${req.params.id} (Notes: ${remarks || 'None'}).`,
+            reqItem.student_id,
+            hostel.id
+        );
 
         res.json({ success: true, message: 'Recommendation submitted for Administrator review.' });
     } catch (err) {
@@ -197,7 +224,6 @@ router.get('/visitors', (req, res) => {
             ORDER BY v.in_time DESC
         `).all(hostel.id);
 
-        // Mask ID proof for privacy (NFR-09: show masked except last 4 characters)
         const maskedVisitors = visitors.map(v => {
             const idLen = v.id_proof.length;
             const masked = idLen > 4 ? '••••-••••-' + v.id_proof.slice(-4) : v.id_proof;
@@ -245,7 +271,14 @@ router.post('/visitors/in', (req, res) => {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `).run(hostel.id, visitor_name.trim(), relation.trim(), id_proof.trim(), student_id, purpose.trim(), passCode, req.session.user.id);
 
-        logAudit(req.session.user.id, req.session.user.email, 'VISITOR_ENTRY', `Visitor ${visitor_name} checked in (Pass: ${passCode}) for Student #${student_id}.`);
+        logAudit(
+            req.session.user.id,
+            req.session.user.email,
+            'VISITOR_ENTRY',
+            `Visitor ${visitor_name} checked in (Pass: ${passCode}) to visit Student #${student_id}.`,
+            student_id,
+            hostel.id
+        );
 
         res.json({
             success: true,
@@ -260,9 +293,38 @@ router.post('/visitors/in', (req, res) => {
 
 router.post('/visitors/:id/out', (req, res) => {
     try {
+        const hostel = getWardenHostel(req.session.user.id);
+        const vis = db.prepare("SELECT * FROM visitors WHERE id = ?").get(req.params.id);
         db.prepare("UPDATE visitors SET out_time = CURRENT_TIMESTAMP WHERE id = ? AND out_time IS NULL").run(req.params.id);
-        logAudit(req.session.user.id, req.session.user.email, 'VISITOR_EXIT', `Visitor record #${req.params.id} checked out.`);
+
+        logAudit(
+            req.session.user.id,
+            req.session.user.email,
+            'VISITOR_EXIT',
+            `Visitor ${vis ? vis.visitor_name : '#' + req.params.id} checked out.`,
+            vis ? vis.student_id : null,
+            hostel ? hostel.id : null
+        );
         res.json({ success: true, message: 'Visitor exit recorded.' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 5. Hostel Specific Activity Logs
+router.get('/activity-logs', (req, res) => {
+    try {
+        const hostel = getWardenHostel(req.session.user.id);
+        if (!hostel) return res.json([]);
+
+        const logs = db.prepare(`
+            SELECT * FROM audit_logs 
+            WHERE hostel_id = ? OR user_id = ?
+            ORDER BY created_at DESC 
+            LIMIT 50
+        `).all(hostel.id, req.session.user.id);
+
+        res.json(logs);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }

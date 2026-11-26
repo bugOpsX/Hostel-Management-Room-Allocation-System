@@ -145,6 +145,8 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     user_email TEXT,
     action TEXT NOT NULL,
     details TEXT,
+    student_id INTEGER REFERENCES students(id),
+    hostel_id INTEGER REFERENCES hostels(id),
     ip_address TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

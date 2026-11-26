@@ -24,5 +24,11 @@ try {
 try {
     db.exec('ALTER TABLE visitors ADD COLUMN pass_code TEXT;');
 } catch (e) {}
+try {
+    db.exec('ALTER TABLE audit_logs ADD COLUMN student_id INTEGER;');
+} catch (e) {}
+try {
+    db.exec('ALTER TABLE audit_logs ADD COLUMN hostel_id INTEGER;');
+} catch (e) {}
 
 module.exports = db;

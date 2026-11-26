@@ -47,6 +47,11 @@
             border: 1px solid rgba(0,0,0,0.05);
         }
         .progress-thin { height: 6px; border-radius: 3px; }
+        .bulk-banner {
+            background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+            color: white;
+            border-radius: 12px;
+        }
     </style>
 </head>
 <body>
@@ -68,6 +73,13 @@
                 <i class="bi bi-building-gear me-2 text-primary"></i> HMRAS <span class="badge bg-danger ms-2 px-2">Administrator</span>
             </a>
             <div class="d-flex align-items-center gap-3">
+                
+                <!-- Notification Bell with Alert Badge -->
+                <button class="btn btn-dark position-relative border-0" type="button" data-bs-toggle="modal" data-bs-target="#adminAlertsModal" title="System Alerts">
+                    <i class="bi bi-bell-fill fs-5 text-warning"></i>
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" id="navAlertBadge">0</span>
+                </button>
+
                 <span class="text-light small d-none d-md-inline" id="userEmailDisplay"><i class="bi bi-person-circle me-1"></i>admin@hostel.com</span>
                 <button class="btn btn-outline-light btn-sm px-3" onclick="logout()"><i class="bi bi-box-arrow-right me-1"></i>Logout</button>
             </div>
@@ -146,34 +158,54 @@
             </div>
         </div>
 
-        <!-- Main Management Tabs -->
+        <!-- Main Management Tabs with Notification Badges on EVERY section -->
         <div class="card border-0 shadow-sm p-3">
             <ul class="nav nav-pills mb-4 flex-wrap gap-2" id="adminTab" role="tablist">
                 <li class="nav-item">
-                    <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tabStudents"><i class="bi bi-people me-1"></i> Students</button>
-                </li>
-                <li class="nav-item">
-                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabHostels"><i class="bi bi-building me-1"></i> Hostels & Rooms</button>
-                </li>
-                <li class="nav-item">
-                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabAllocations"><i class="bi bi-person-check me-1"></i> Allocation Engine</button>
-                </li>
-                <li class="nav-item">
-                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabWaitlist">
-                        <i class="bi bi-list-ol me-1"></i> Waitlist Queue <span class="badge bg-danger rounded-pill ms-1" id="waitlistBadgeCount">0</span>
+                    <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tabStudents">
+                        <i class="bi bi-people me-1"></i> Students 
+                        <span class="badge bg-danger rounded-pill ms-1" id="badgePendingStudents">0</span>
                     </button>
                 </li>
                 <li class="nav-item">
-                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabRequests"><i class="bi bi-arrow-left-right me-1"></i> Transfer & Vacating</button>
+                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabHostels">
+                        <i class="bi bi-building me-1"></i> Hostels & Rooms
+                    </button>
                 </li>
                 <li class="nav-item">
-                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabFees"><i class="bi bi-cash-stack me-1"></i> Fee Records</button>
+                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabAllocations">
+                        <i class="bi bi-lightning-charge-fill text-warning me-1"></i> Bulk Allocation 
+                        <span class="badge bg-warning text-dark rounded-pill ms-1" id="badgeUnallocated">0</span>
+                    </button>
                 </li>
                 <li class="nav-item">
-                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabNotices"><i class="bi bi-megaphone me-1"></i> Notices</button>
+                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabWaitlist">
+                        <i class="bi bi-list-ol me-1"></i> Waitlist Queue 
+                        <span class="badge bg-danger rounded-pill ms-1" id="waitlistBadgeCount">0</span>
+                    </button>
                 </li>
                 <li class="nav-item">
-                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabAudit"><i class="bi bi-journal-text me-1"></i> Audit Trail</button>
+                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabRequests">
+                        <i class="bi bi-arrow-left-right me-1"></i> Transfer & Vacating 
+                        <span class="badge bg-danger rounded-pill ms-1" id="badgePendingRequests">0</span>
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabFees">
+                        <i class="bi bi-cash-stack me-1"></i> Fee Records 
+                        <span class="badge bg-danger rounded-pill ms-1" id="badgeOverdueFees">0</span>
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabNotices">
+                        <i class="bi bi-megaphone me-1"></i> Notices 
+                        <span class="badge bg-info text-dark rounded-pill ms-1" id="badgeNotices">0</span>
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabAudit">
+                        <i class="bi bi-journal-text me-1"></i> Audit Trail
+                    </button>
                 </li>
             </ul>
 
@@ -220,10 +252,8 @@
                         </div>
                     </div>
 
-                    <!-- Hostels Summary Cards -->
                     <div class="row g-3 mb-4" id="hostelsSummaryRow"></div>
 
-                    <!-- Room & Bed Table Filter -->
                     <div class="row g-2 mb-3">
                         <div class="col-md-4">
                             <select id="filterHostelSelect" class="form-select form-select-sm" onchange="loadRoomsTable()">
@@ -261,18 +291,70 @@
                     </div>
                 </div>
 
-                <!-- 3. ALLOCATIONS TAB -->
+                <!-- 3. BULK & AUTOMATIC ALLOCATIONS TAB -->
                 <div class="tab-pane fade" id="tabAllocations">
-                    <h5 class="fw-bold mb-3"><i class="bi bi-person-check me-2"></i>Room Allocation Engine</h5>
+                    
+                    <div class="card bulk-banner p-4 mb-4 border-0 shadow">
+                        <div class="row align-items-center g-3">
+                            <div class="col-lg-7">
+                                <span class="badge bg-warning text-dark px-3 py-1 mb-2 fw-bold">
+                                    <i class="bi bi-lightning-charge-fill me-1"></i> BATCH ALLOCATION ENGINE (FR-22, FR-23)
+                                </span>
+                                <h3 class="fw-bold mb-1">Bulk Room Allocation</h3>
+                                <p class="mb-0 text-white-50 small">
+                                    Automatically processes all approved unallocated students, matches them with vacant beds by gender (BR-03), creates allocations, generates term fees (BR-05), and queues excess students to the Waitlist (FR-26).
+                                </p>
+                            </div>
+                            <div class="col-lg-5 text-lg-end">
+                                <div class="bg-white bg-opacity-10 p-3 rounded-3 border border-white border-opacity-25 text-start mb-2">
+                                    <div class="d-flex justify-content-between small text-white-50 mb-1">
+                                        <span>Ready for Allocation:</span>
+                                        <strong class="text-white" id="unallocatedCountDisplay">0 Students</strong>
+                                    </div>
+                                    <div class="d-flex justify-content-between small text-white-50">
+                                        <span>Vacant Beds Available:</span>
+                                        <strong class="text-success" id="vacantBedsCountDisplay">0 Beds</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr class="border-white border-opacity-25 my-3">
+
+                        <form id="bulkAllocForm" class="row g-3 align-items-end">
+                            <div class="col-md-4">
+                                <label class="form-label small text-white-50 fw-semibold mb-1">SORTING / PRIORITY CRITERIA (FR-23)</label>
+                                <select id="bulkOrderBy" class="form-select form-select-sm">
+                                    <option value="registration" selected>Earliest Registration Date (FIFO per FR-23)</option>
+                                    <option value="year_asc">Freshmen First (1st Year ➔ 4th Year)</option>
+                                    <option value="year_desc">Senior Years First (4th Year ➔ 1st Year)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small text-white-50 fw-semibold mb-1">FEE TERM</label>
+                                <input type="text" id="bulkTerm" class="form-control form-control-sm" value="Academic Term 2026-27">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small text-white-50 fw-semibold mb-1">TERM FEE (₹)</label>
+                                <input type="number" id="bulkFeeAmount" class="form-control form-control-sm" value="25000">
+                            </div>
+                            <div class="col-md-3">
+                                <button type="submit" class="btn btn-warning btn-sm w-100 py-2 fw-bold shadow-sm" id="bulkRunBtn">
+                                    <i class="bi bi-play-circle-fill me-1"></i> Allocate All Students in Bulk
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Individual Allocations Side-by-Side (Manual & Single Auto) -->
                     <div class="row g-4">
-                        
-                        <!-- Manual Allocation -->
                         <div class="col-lg-6">
-                            <div class="card p-4 border h-100 bg-light">
-                                <h6 class="fw-bold text-primary mb-3"><i class="bi bi-hand-index me-1"></i> Manual Bed Allocation</h6>
+                            <div class="card p-4 border h-100 bg-light shadow-sm">
+                                <h6 class="fw-bold text-primary mb-2"><i class="bi bi-hand-index me-1"></i> Manual Bed Allocation (Single Student)</h6>
+                                <p class="text-muted small mb-3">Assign a specific bed to a specific student manually.</p>
                                 <form id="manualAllocForm">
                                     <div class="mb-3">
-                                        <label class="form-label small fw-semibold">1. Select Eligible Student (Approved & No Active Bed)</label>
+                                        <label class="form-label small fw-semibold">1. Select Eligible Student</label>
                                         <select id="allocStudentSelect" class="form-select" required onchange="filterAvailableBedsBySelectedStudent()">
                                             <option value="">Choose Student...</option>
                                         </select>
@@ -300,13 +382,10 @@
                             </div>
                         </div>
 
-                        <!-- Automated Allocation -->
                         <div class="col-lg-6">
-                            <div class="card p-4 border h-100 bg-light">
-                                <h6 class="fw-bold text-success mb-3"><i class="bi bi-magic me-1"></i> 1-Click Automated Allocation</h6>
-                                <p class="text-muted small">
-                                    System locates the first vacant bed in a gender-appropriate hostel (BR-03), assigns it atomically, and auto-generates term fee (BR-05). If full, automatically queues student to waitlist (FR-26).
-                                </p>
+                            <div class="card p-4 border h-100 bg-light shadow-sm">
+                                <h6 class="fw-bold text-success mb-2"><i class="bi bi-magic me-1"></i> Single Auto Allocation</h6>
+                                <p class="text-muted small mb-3">Auto-allocate a single chosen student instantly.</p>
                                 <form id="autoAllocForm">
                                     <div class="mb-3">
                                         <label class="form-label small fw-semibold">Select Student</label>
@@ -315,17 +394,16 @@
                                         </select>
                                     </div>
                                     <button type="submit" class="btn btn-success w-100 py-2 fw-semibold">
-                                        <i class="bi bi-lightning-charge me-1"></i> Run Automated Allocation
+                                        <i class="bi bi-lightning-charge me-1"></i> Run Auto-Allocate for Student
                                     </button>
                                 </form>
                                 <div id="autoAllocResult" class="mt-3"></div>
                             </div>
                         </div>
-
                     </div>
                 </div>
 
-                <!-- 4. WAITLIST TAB (PHASE 2 - FR-23, FR-26) -->
+                <!-- 4. WAITLIST TAB -->
                 <div class="tab-pane fade" id="tabWaitlist">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h5 class="fw-bold mb-0"><i class="bi bi-list-ol me-2"></i>Automated Waitlist Priority Queue (FR-26)</h5>
@@ -414,17 +492,20 @@
                     </div>
                 </div>
 
-                <!-- 8. AUDIT LOG TAB (PHASE 2 - FR-82, NFR-10) -->
+                <!-- 8. AUDIT LOG TAB (FR-82, NFR-10) -->
                 <div class="tab-pane fade" id="tabAudit">
-                    <h5 class="fw-bold mb-3"><i class="bi bi-journal-text me-2"></i>Immutable System Audit Trail (NFR-10)</h5>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="fw-bold mb-0"><i class="bi bi-journal-text me-2"></i>System-Wide Activity & Audit Trail (NFR-10)</h5>
+                        <input type="text" id="auditFilterInput" class="form-control form-control-sm w-auto" placeholder="Filter activity..." onkeyup="filterAuditLogs()">
+                    </div>
                     <div class="table-responsive">
                         <table class="table table-sm table-hover align-middle mb-0">
                             <thead class="table-light">
                                 <tr>
                                     <th>Timestamp</th>
-                                    <th>User</th>
+                                    <th>Actor</th>
                                     <th>Action</th>
-                                    <th>Transaction Details</th>
+                                    <th>Activity Details</th>
                                 </tr>
                             </thead>
                             <tbody id="auditTableBody">
@@ -439,6 +520,90 @@
     </div>
 
     <!-- Modals -->
+    <!-- System Alerts Overview Modal (Triggered by Bell Icon) -->
+    <div class="modal fade" id="adminAlertsModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-bell-fill text-warning me-2"></i>Pending System Alerts</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <div class="list-group list-group-flush" id="alertsListGroup">
+                        <div class="list-group-item text-center py-3 text-muted">Checking alerts...</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Allocation Result Modal -->
+    <div class="modal fade" id="bulkResultModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-check-all text-success me-2"></i>Bulk Allocation Report</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <div class="card p-3 bg-success bg-opacity-10 border-success border">
+                                <h4 class="fw-bold text-success mb-0" id="resAllocatedCount">0</h4>
+                                <small class="text-muted fw-semibold">Students Allocated Rooms</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card p-3 bg-warning bg-opacity-10 border-warning border">
+                                <h4 class="fw-bold text-warning mb-0" id="resWaitlistedCount">0</h4>
+                                <small class="text-muted fw-semibold">Students Queued to Waitlist</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h6 class="fw-bold mb-2">Allocated Students:</h6>
+                    <div class="table-responsive mb-3" style="max-height: 250px;">
+                        <table class="table table-sm table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Student</th>
+                                    <th>Roll No</th>
+                                    <th>Hostel</th>
+                                    <th>Room</th>
+                                    <th>Bed</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bulkResultAllocatedBody"></tbody>
+                        </table>
+                    </div>
+
+                    <div id="waitlistSummarySection" class="d-none">
+                        <h6 class="fw-bold text-danger mb-2">Waitlisted (Capacity Full):</h6>
+                        <div class="table-responsive" style="max-height: 180px;">
+                            <table class="table table-sm table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Student</th>
+                                        <th>Roll No</th>
+                                        <th>Gender</th>
+                                        <th>Reason</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="bulkResultWaitlistBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Done</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Bulk Upload Rooms CSV Modal (FR-20) -->
     <div class="modal fade" id="bulkRoomModal" tabindex="-1">
         <div class="modal-dialog modal-lg">
@@ -634,6 +799,7 @@
     <script>
         let eligibleStudentsCache = [];
         let hostelsCache = [];
+        let allAuditLogsCache = [];
 
         function showToast(message, type = 'success') {
             const toastEl = document.getElementById('adminToast');
@@ -685,7 +851,50 @@
             document.getElementById('kpiPendingStudents').textContent = `${data.students.pending} Students Pending Approval`;
             document.getElementById('kpiOpenComplaints').textContent = data.complaints.open;
             document.getElementById('kpiEscalatedComplaints').textContent = `${data.complaints.escalated} Escalated (>72h)`;
-            document.getElementById('waitlistBadgeCount').textContent = data.waitlistCount || 0;
+            
+            // Notification Badges on Every Navigation Tab
+            document.getElementById('navAlertBadge').textContent = data.badges.totalAlerts || 0;
+            document.getElementById('badgePendingStudents').textContent = data.badges.pendingStudents || 0;
+            document.getElementById('badgeUnallocated').textContent = data.badges.unallocated || 0;
+            document.getElementById('waitlistBadgeCount').textContent = data.badges.waitlist || 0;
+            document.getElementById('badgePendingRequests').textContent = data.badges.pendingRequests || 0;
+            document.getElementById('badgeOverdueFees').textContent = data.badges.overdueFees || 0;
+            document.getElementById('badgeNotices').textContent = data.badges.notices || 0;
+            
+            // Bulk Banner counts
+            document.getElementById('unallocatedCountDisplay').textContent = `${data.students.unallocated || 0} Students`;
+            document.getElementById('vacantBedsCountDisplay').textContent = `${data.beds.vacant || 0} Beds`;
+
+            // Populate Alerts Modal list
+            const alertsList = document.getElementById('alertsListGroup');
+            alertsList.innerHTML = `
+                <a href="#tabStudents" onclick="switchToTab('tabStudents')" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                    <div><i class="bi bi-person-check text-warning me-2"></i>Students Awaiting Account Approval</div>
+                    <span class="badge bg-danger rounded-pill">${data.badges.pendingStudents}</span>
+                </a>
+                <a href="#tabAllocations" onclick="switchToTab('tabAllocations')" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                    <div><i class="bi bi-door-open text-primary me-2"></i>Approved Students Awaiting Room Bed</div>
+                    <span class="badge bg-warning text-dark rounded-pill">${data.badges.unallocated}</span>
+                </a>
+                <a href="#tabRequests" onclick="switchToTab('tabRequests')" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                    <div><i class="bi bi-arrow-left-right text-info me-2"></i>Pending Room Transfer/Vacating Decisions</div>
+                    <span class="badge bg-danger rounded-pill">${data.badges.pendingRequests}</span>
+                </a>
+                <a href="#tabFees" onclick="switchToTab('tabFees')" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                    <div><i class="bi bi-cash text-danger me-2"></i>Unpaid or Overdue Hostel Fees</div>
+                    <span class="badge bg-danger rounded-pill">${data.badges.overdueFees}</span>
+                </a>
+                <div class="list-group-item d-flex justify-content-between align-items-center">
+                    <div><i class="bi bi-tools text-danger me-2"></i>Escalated Maintenance Complaints (>72h)</div>
+                    <span class="badge bg-danger rounded-pill">${data.badges.escalatedComplaints}</span>
+                </div>
+            `;
+        }
+
+        function switchToTab(tabId) {
+            bootstrap.Modal.getInstance(document.getElementById('adminAlertsModal'))?.hide();
+            const tabBtn = document.querySelector(`button[data-bs-target="#${tabId}"]`);
+            if (tabBtn) bootstrap.Tab.getOrCreateInstance(tabBtn).show();
         }
 
         async function loadStudentsTable() {
@@ -997,7 +1206,83 @@ Sarojini Girls Hostel,203,2,Single,1`;
             }
         });
 
-        // 4. Waitlist Table
+        document.getElementById('bulkAllocForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('bulkRunBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Processing Bulk Allocation...';
+
+            const payload = {
+                order_by: document.getElementById('bulkOrderBy').value,
+                term: document.getElementById('bulkTerm').value,
+                fee_amount: document.getElementById('bulkFeeAmount').value
+            };
+
+            try {
+                const res = await fetch('/api/admin/allocations/bulk', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+
+                if (res.ok) {
+                    showToast(data.message);
+                    
+                    document.getElementById('resAllocatedCount').textContent = data.allocatedCount;
+                    document.getElementById('resWaitlistedCount').textContent = data.waitlistedCount;
+
+                    const allocBody = document.getElementById('bulkResultAllocatedBody');
+                    if (data.allocated.length === 0) {
+                        allocBody.innerHTML = '<tr><td colspan="5" class="text-center py-2 text-muted">No students allocated in this run.</td></tr>';
+                    } else {
+                        allocBody.innerHTML = data.allocated.map(a => `
+                            <tr>
+                                <td class="fw-semibold">${a.student_name}</td>
+                                <td><span class="badge bg-light text-dark border font-monospace">${a.enrollment_no}</span></td>
+                                <td>${a.hostel_name}</td>
+                                <td>Room ${a.room_no}</td>
+                                <td><span class="badge bg-success">Bed ${a.bed_no}</span></td>
+                            </tr>
+                        `).join('');
+                    }
+
+                    const waitlistSection = document.getElementById('waitlistSummarySection');
+                    const waitlistBody = document.getElementById('bulkResultWaitlistBody');
+                    if (data.waitlisted.length > 0) {
+                        waitlistSection.className = 'mt-3';
+                        waitlistBody.innerHTML = data.waitlisted.map(w => `
+                            <tr>
+                                <td class="fw-semibold">${w.student_name}</td>
+                                <td>${w.enrollment_no}</td>
+                                <td>${w.gender}</td>
+                                <td class="small text-danger">${w.reason}</td>
+                            </tr>
+                        `).join('');
+                    } else {
+                        waitlistSection.className = 'd-none';
+                    }
+
+                    new bootstrap.Modal(document.getElementById('bulkResultModal')).show();
+
+                    loadDashboardKPIs();
+                    loadEligibleStudents();
+                    loadStudentsTable();
+                    loadRoomsTable();
+                    loadWaitlistTable();
+                    loadFeesTable();
+                    loadAuditLogs();
+                } else {
+                    showToast('Bulk allocation error: ' + data.error, 'error');
+                }
+            } catch (err) {
+                showToast('Server connection error: ' + err.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-play-circle-fill me-1"></i> Allocate All Students in Bulk';
+            }
+        });
+
         async function loadWaitlistTable() {
             const res = await fetch('/api/admin/waitlist');
             const list = await res.json();
@@ -1039,7 +1324,6 @@ Sarojini Girls Hostel,203,2,Single,1`;
             }
         }
 
-        // 5. Requests Table
         async function loadRequestsTable() {
             const res = await fetch('/api/admin/requests');
             const requests = await res.json();
@@ -1095,7 +1379,6 @@ Sarojini Girls Hostel,203,2,Single,1`;
             }
         }
 
-        // 6. Fees Table
         async function loadFeesTable() {
             const res = await fetch('/api/admin/fees');
             const fees = await res.json();
@@ -1153,7 +1436,6 @@ Sarojini Girls Hostel,203,2,Single,1`;
             }
         });
 
-        // 7. Notices
         async function loadNotices() {
             const res = await fetch('/api/notices');
             const notices = await res.json();
@@ -1210,11 +1492,19 @@ Sarojini Girls Hostel,203,2,Single,1`;
             }
         });
 
-        // 8. Audit Logs Feed
+        // 8. Audit Logs Feed with Client-Side Filter
         async function loadAuditLogs() {
             const res = await fetch('/api/admin/audit-logs');
-            const logs = await res.json();
+            allAuditLogsCache = await res.json();
+            renderAuditLogs(allAuditLogsCache);
+        }
+
+        function renderAuditLogs(logs) {
             const tbody = document.getElementById('auditTableBody');
+            if (logs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-muted">No activity records logged.</td></tr>';
+                return;
+            }
             tbody.innerHTML = logs.map(l => `
                 <tr>
                     <td class="small text-muted font-monospace">${new Date(l.created_at).toLocaleString()}</td>
@@ -1223,6 +1513,16 @@ Sarojini Girls Hostel,203,2,Single,1`;
                     <td class="small">${l.details}</td>
                 </tr>
             `).join('');
+        }
+
+        function filterAuditLogs() {
+            const q = document.getElementById('auditFilterInput').value.toLowerCase();
+            const filtered = allAuditLogsCache.filter(l => 
+                (l.action && l.action.toLowerCase().includes(q)) ||
+                (l.details && l.details.toLowerCase().includes(q)) ||
+                (l.user_email && l.user_email.toLowerCase().includes(q))
+            );
+            renderAuditLogs(filtered);
         }
 
         init();
