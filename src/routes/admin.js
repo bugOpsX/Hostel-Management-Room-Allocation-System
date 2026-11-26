@@ -826,6 +826,17 @@ router.post('/requests/:id/action', (req, res) => {
                 });
             }
 
+            const unpaidPenalty = db.prepare(`
+                SELECT id, title, amount FROM penalties 
+                WHERE student_id = ? AND status = 'Unpaid'
+            `).get(request.student_id);
+
+            if (unpaidPenalty) {
+                return res.status(400).json({
+                    error: `Cannot clear vacating request: Student has unpaid fine/penalty dues (Penalty #${unpaidPenalty.id}: "${unpaidPenalty.title}", Amount: ₹${unpaidPenalty.amount}) (BR-06).`
+                });
+            }
+
             const vacateTx = db.transaction(() => {
                 db.prepare("UPDATE allocations SET status = 'Closed', end_date = DATE('now') WHERE id = ?").run(request.allocation_id);
                 db.prepare("UPDATE beds SET status = 'Vacant' WHERE id = ?").run(request.current_bed_id);
