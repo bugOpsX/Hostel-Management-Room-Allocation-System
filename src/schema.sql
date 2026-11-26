@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT NOT NULL,
     role TEXT CHECK(role IN ('admin', 'warden', 'student')) NOT NULL,
     status TEXT CHECK(status IN ('pending', 'active', 'inactive')) DEFAULT 'active',
+    failed_attempts INTEGER DEFAULT 0,
+    locked_until DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -122,7 +124,27 @@ CREATE TABLE IF NOT EXISTS visitors (
     id_proof TEXT NOT NULL,
     student_id INTEGER NOT NULL REFERENCES students(id),
     purpose TEXT NOT NULL,
+    pass_code TEXT,
     in_time DATETIME DEFAULT CURRENT_TIMESTAMP,
     out_time DATETIME,
     recorded_by INTEGER NOT NULL REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS waitlist (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    preferred_hostel_id INTEGER REFERENCES hostels(id),
+    priority_order INTEGER NOT NULL,
+    status TEXT CHECK(status IN ('Waiting', 'Offered', 'Allocated', 'Cancelled')) DEFAULT 'Waiting',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    user_email TEXT,
+    action TEXT NOT NULL,
+    details TEXT,
+    ip_address TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

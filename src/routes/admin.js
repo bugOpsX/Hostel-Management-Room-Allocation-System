@@ -2,10 +2,11 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { requireAdmin } = require('../middleware/auth');
+const { logAudit } = require('../utils/audit');
 
 router.use(requireAdmin);
 
-// 1. Dashboard Metrics (FR-68)
+// 1. Dashboard Metrics (FR-68, FR-69, BR-10: 72h escalated complaints)
 router.get('/dashboard', (req, res) => {
     try {
         const totalStudents = db.prepare('SELECT COUNT(*) as count FROM students').get().count;
@@ -20,9 +21,18 @@ router.get('/dashboard', (req, res) => {
             FROM beds
         `).get();
 
-        const openComplaints = db.prepare("SELECT COUNT(*) as count FROM complaints WHERE status != 'Resolved'").get().count;
+        // Check open & escalated complaints (BR-10)
+        const complaintStats = db.prepare(`
+            SELECT 
+                COUNT(*) as total_open,
+                SUM(CASE WHEN datetime(created_at, '+72 hours') <= datetime('now') THEN 1 ELSE 0 END) as escalated
+            FROM complaints 
+            WHERE status != 'Resolved'
+        `).get();
+
         const pendingRequests = db.prepare("SELECT COUNT(*) as count FROM room_requests WHERE status = 'Pending'").get().count;
         const overdueFees = db.prepare("SELECT COUNT(*) as count FROM fees WHERE status IN ('Unpaid', 'Overdue')").get().count;
+        const waitlistCount = db.prepare("SELECT COUNT(*) as count FROM waitlist WHERE status = 'Waiting'").get().count;
 
         res.json({
             students: { total: totalStudents, pending: pendingStudents },
@@ -33,16 +43,20 @@ router.get('/dashboard', (req, res) => {
                 maintenance: bedStats.maintenance || 0,
                 occupancyRate: bedStats.total ? Math.round((bedStats.occupied / bedStats.total) * 100) : 0
             },
-            openComplaints,
+            complaints: {
+                open: complaintStats.total_open || 0,
+                escalated: complaintStats.escalated || 0
+            },
             pendingRequests,
-            overdueFees
+            overdueFees,
+            waitlistCount
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// 2. Student Directory & Approvals (FR-03, FR-11)
+// 2. Student Directory & Approvals
 router.get('/students', (req, res) => {
     try {
         const students = db.prepare(`
@@ -67,17 +81,18 @@ router.get('/students', (req, res) => {
 
 router.post('/students/:id/approve', (req, res) => {
     try {
-        const student = db.prepare('SELECT user_id FROM students WHERE id = ?').get(req.params.id);
+        const student = db.prepare('SELECT user_id, full_name, enrollment_no FROM students WHERE id = ?').get(req.params.id);
         if (!student) return res.status(404).json({ error: 'Student not found' });
 
         db.prepare("UPDATE users SET status = 'active' WHERE id = ?").run(student.user_id);
+        logAudit(req.session.user.id, req.session.user.email, 'STUDENT_APPROVAL', `Approved account for ${student.full_name} (${student.enrollment_no}).`);
         res.json({ success: true, message: 'Student account approved successfully' });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// 3. Hostels & Rooms Management (FR-12 to FR-20)
+// 3. Hostels & Rooms
 router.get('/hostels', (req, res) => {
     try {
         const hostels = db.prepare(`
@@ -111,6 +126,7 @@ router.post('/hostels', (req, res) => {
             VALUES (?, ?, ?, ?)
         `).run(name.trim(), type, parseInt(floors, 10), warden_id || null);
 
+        logAudit(req.session.user.id, req.session.user.email, 'HOSTEL_CREATE', `Created hostel ${name} (${type}) with ${floors} floors.`);
         res.json({ success: true, hostelId: resHostel.lastInsertRowid });
     } catch (err) {
         res.status(400).json({ error: err.message });
@@ -162,7 +178,7 @@ router.post('/rooms', (req, res) => {
     }
     const cap = parseInt(capacity, 10);
     if (cap < 1 || cap > 6) {
-        return res.status(400).json({ error: 'Capacity must be between 1 and 6 beds.' });
+        return res.status(400).json({ error: 'Capacity must be between 1 and 6 beds (BR-12).' });
     }
 
     try {
@@ -181,6 +197,7 @@ router.post('/rooms', (req, res) => {
                     VALUES (?, ?, 'Vacant')
                 `).run(roomId, bedNo);
             }
+            logAudit(req.session.user.id, req.session.user.email, 'ROOM_CREATE', `Created room ${room_no} with ${cap} beds in hostel #${hostel_id}.`);
             return roomId;
         });
 
@@ -189,6 +206,82 @@ router.post('/rooms', (req, res) => {
     } catch (err) {
         res.status(400).json({ error: err.message });
     }
+});
+
+// Bulk Room Upload via CSV (FR-20)
+router.post('/rooms/bulk-csv', (req, res) => {
+    const { csv_data } = req.body;
+    if (!csv_data || typeof csv_data !== 'string') {
+        return res.status(400).json({ error: 'CSV text data is required.' });
+    }
+
+    const lines = csv_data.trim().split('\n');
+    let accepted = 0;
+    const rejected = [];
+
+    // Map existing hostels by name
+    const hostels = db.prepare('SELECT id, name FROM hostels').all();
+    const hostelMap = {};
+    hostels.forEach(h => hostelMap[h.name.toLowerCase().trim()] = h.id);
+
+    const insertRoom = db.prepare(`
+        INSERT INTO rooms (hostel_id, room_no, floor, room_type, capacity)
+        VALUES (?, ?, ?, ?, ?)
+    `);
+    const insertBed = db.prepare(`
+        INSERT INTO beds (room_id, bed_no, status)
+        VALUES (?, ?, 'Vacant')
+    `);
+
+    const letters = ['A', 'B', 'C', 'D', 'E', 'F'];
+
+    for (let idx = 0; idx < lines.length; idx++) {
+        const line = lines[idx].trim();
+        if (!line || (idx === 0 && line.toLowerCase().includes('hostelname'))) continue; // skip header or empty
+
+        const parts = line.split(',').map(p => p.trim());
+        if (parts.length < 5) {
+            rejected.push({ row: idx + 1, data: line, reason: 'Expected 5 columns (HostelName,RoomNo,Floor,RoomType,Capacity)' });
+            continue;
+        }
+
+        const [hName, rNo, floorStr, rType, capStr] = parts;
+        const hId = hostelMap[hName.toLowerCase()];
+        if (!hId) {
+            rejected.push({ row: idx + 1, data: line, reason: `Hostel "${hName}" not found.` });
+            continue;
+        }
+
+        const floor = parseInt(floorStr, 10);
+        const cap = parseInt(capStr, 10);
+        if (isNaN(cap) || cap < 1 || cap > 6) {
+            rejected.push({ row: idx + 1, data: line, reason: 'Capacity must be an integer between 1 and 6 (BR-12).' });
+            continue;
+        }
+
+        try {
+            const bulkTx = db.transaction(() => {
+                const roomRes = insertRoom.run(hId, rNo, floor || 1, rType, cap);
+                const roomId = roomRes.lastInsertRowid;
+                for (let i = 0; i < cap; i++) {
+                    insertBed.run(roomId, `${rNo}-${letters[i]}`);
+                }
+            });
+            bulkTx();
+            accepted++;
+        } catch (e) {
+            rejected.push({ row: idx + 1, data: line, reason: e.message });
+        }
+    }
+
+    logAudit(req.session.user.id, req.session.user.email, 'BULK_ROOM_IMPORT', `Bulk import: ${accepted} rooms created, ${rejected.length} rejected.`);
+
+    res.json({
+        success: true,
+        acceptedCount: accepted,
+        rejectedCount: rejected.length,
+        rejectedRows: rejected
+    });
 });
 
 router.post('/beds/:id/status', (req, res) => {
@@ -203,14 +296,14 @@ router.post('/beds/:id/status', (req, res) => {
             return res.status(400).json({ error: 'Cannot change status of an Occupied bed.' });
         }
         db.prepare('UPDATE beds SET status = ? WHERE id = ?').run(status, req.params.id);
+        logAudit(req.session.user.id, req.session.user.email, 'BED_STATUS_TOGGLE', `Bed #${req.params.id} changed to ${status}.`);
         res.json({ success: true, status });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// 4. Room Allocation Engine (FR-21 to FR-28)
-// Eligible students: active user account, no active allocation (BR-01, BR-04)
+// 4. Room Allocation Engine & Waitlist Management (FR-21 to FR-28)
 router.get('/allocations/eligible-students', (req, res) => {
     try {
         const students = db.prepare(`
@@ -227,7 +320,6 @@ router.get('/allocations/eligible-students', (req, res) => {
     }
 });
 
-// Available beds (Vacant)
 router.get('/allocations/available-beds', (req, res) => {
     const { gender } = req.query;
     try {
@@ -252,7 +344,7 @@ router.get('/allocations/available-beds', (req, res) => {
     }
 });
 
-// Manual Allocation (FR-21)
+// Manual Allocation
 router.post('/allocations/manual', (req, res) => {
     const { student_id, bed_id, term, fee_amount } = req.body;
     if (!student_id || !bed_id) {
@@ -261,9 +353,8 @@ router.post('/allocations/manual', (req, res) => {
 
     try {
         const allocTx = db.transaction(() => {
-            // Check student eligibility (BR-01, BR-04)
             const student = db.prepare(`
-                SELECT s.id, s.gender, u.status 
+                SELECT s.id, s.full_name, s.enrollment_no, s.gender, u.status 
                 FROM students s 
                 JOIN users u ON s.user_id = u.id 
                 WHERE s.id = ?
@@ -278,9 +369,8 @@ router.post('/allocations/manual', (req, res) => {
                 throw new Error('Student already holds an active bed allocation (BR-01).');
             }
 
-            // Check bed eligibility (BR-02, BR-03)
             const bed = db.prepare(`
-                SELECT b.id, b.status, h.type as hostel_type
+                SELECT b.id, b.bed_no, b.status, h.name as hostel_name, h.type as hostel_type
                 FROM beds b
                 JOIN rooms r ON b.room_id = r.id
                 JOIN hostels h ON r.hostel_id = h.id
@@ -295,14 +385,15 @@ router.post('/allocations/manual', (req, res) => {
                 throw new Error(`Gender mismatch: ${student.gender} student cannot be allocated to ${bed.hostel_type} hostel (BR-03).`);
             }
 
-            // Perform atomic allocation
             db.prepare("UPDATE beds SET status = 'Occupied' WHERE id = ?").run(bed_id);
             const newAlloc = db.prepare(`
                 INSERT INTO allocations (student_id, bed_id, start_date, status)
                 VALUES (?, ?, DATE('now'), 'Active')
             `).run(student_id, bed_id);
 
-            // Generate Fee automatically (BR-05, FR-27, FR-41)
+            // Close waitlist entry if present
+            db.prepare("UPDATE waitlist SET status = 'Allocated' WHERE student_id = ? AND status = 'Waiting'").run(student_id);
+
             const feeTerm = term || 'Academic Term 2026-27';
             const feeCost = fee_amount ? parseFloat(fee_amount) : 25000;
             const dueDate = new Date();
@@ -314,6 +405,7 @@ router.post('/allocations/manual', (req, res) => {
                 VALUES (?, ?, ?, ?, 'Unpaid')
             `).run(newAlloc.lastInsertRowid, feeTerm, feeCost, dueStr);
 
+            logAudit(req.session.user.id, req.session.user.email, 'ROOM_ALLOCATION', `Allocated Bed ${bed.bed_no} in ${bed.hostel_name} to ${student.full_name} (${student.enrollment_no}).`);
             return newAlloc.lastInsertRowid;
         });
 
@@ -324,14 +416,14 @@ router.post('/allocations/manual', (req, res) => {
     }
 });
 
-// Auto Allocation (FR-22)
+// Auto Allocation with Waitlist fallback (FR-22, FR-26)
 router.post('/allocations/auto', (req, res) => {
     const { student_id, term, fee_amount } = req.body;
     if (!student_id) return res.status(400).json({ error: 'Student ID is required.' });
 
     try {
         const student = db.prepare(`
-            SELECT s.id, s.gender, u.status 
+            SELECT s.id, s.full_name, s.enrollment_no, s.gender, u.status 
             FROM students s 
             JOIN users u ON s.user_id = u.id 
             WHERE s.id = ?
@@ -348,9 +440,8 @@ router.post('/allocations/auto', (req, res) => {
 
         const expectedHostelType = student.gender === 'Female' ? 'Girls' : 'Boys';
 
-        // Find first vacant bed in matching hostel
         const vacantBed = db.prepare(`
-            SELECT b.id, b.bed_no, r.room_no, h.name as hostel_name
+            SELECT b.id, b.bed_no, r.room_no, h.id as hostel_id, h.name as hostel_name
             FROM beds b
             JOIN rooms r ON b.room_id = r.id
             JOIN hostels h ON r.hostel_id = h.id
@@ -360,16 +451,29 @@ router.post('/allocations/auto', (req, res) => {
         `).get(expectedHostelType);
 
         if (!vacantBed) {
-            return res.status(404).json({ error: `No vacant bed available in ${expectedHostelType} hostels.` });
+            // Auto-add to waitlist per FR-26
+            const nextPriority = (db.prepare('SELECT MAX(priority_order) as maxP FROM waitlist').get().maxP || 0) + 1;
+            db.prepare(`
+                INSERT INTO waitlist (student_id, priority_order, status)
+                VALUES (?, ?, 'Waiting')
+            `).run(student_id, nextPriority);
+
+            logAudit(req.session.user.id, req.session.user.email, 'WAITLIST_ADD', `No bed vacant in ${expectedHostelType} hostels. Student ${student.full_name} added to Waitlist at position #${nextPriority} (FR-26).`);
+
+            return res.status(200).json({
+                waitlisted: true,
+                message: `No vacant bed available in ${expectedHostelType} hostels. Student added to Waitlist at position #${nextPriority} (FR-26).`
+            });
         }
 
-        // Run atomic allocation
         const autoTx = db.transaction(() => {
             db.prepare("UPDATE beds SET status = 'Occupied' WHERE id = ?").run(vacantBed.id);
             const newAlloc = db.prepare(`
                 INSERT INTO allocations (student_id, bed_id, start_date, status)
                 VALUES (?, ?, DATE('now'), 'Active')
             `).run(student_id, vacantBed.id);
+
+            db.prepare("UPDATE waitlist SET status = 'Allocated' WHERE student_id = ? AND status = 'Waiting'").run(student_id);
 
             const feeTerm = term || 'Academic Term 2026-27';
             const feeCost = fee_amount ? parseFloat(fee_amount) : 25000;
@@ -382,12 +486,15 @@ router.post('/allocations/auto', (req, res) => {
                 VALUES (?, ?, ?, ?, 'Unpaid')
             `).run(newAlloc.lastInsertRowid, feeTerm, feeCost, dueStr);
 
+            logAudit(req.session.user.id, req.session.user.email, 'AUTO_ALLOCATION', `Auto-allocated Room ${vacantBed.room_no}, Bed ${vacantBed.bed_no} in ${vacantBed.hostel_name} to ${student.full_name}.`);
+
             return { allocId: newAlloc.lastInsertRowid, bed: vacantBed };
         });
 
         const result = autoTx();
         res.json({
             success: true,
+            waitlisted: false,
             message: `Auto-allocated Room ${result.bed.room_no}, Bed ${result.bed.bed_no} in ${result.bed.hostel_name}.`,
             allocationId: result.allocId
         });
@@ -396,7 +503,88 @@ router.post('/allocations/auto', (req, res) => {
     }
 });
 
-// 5. Transfer & Vacating Requests (FR-37, FR-38, FR-39)
+// Waitlist Endpoints (FR-23, FR-26)
+router.get('/waitlist', (req, res) => {
+    try {
+        const waitlist = db.prepare(`
+            SELECT 
+                w.*,
+                s.full_name as student_name, s.enrollment_no, s.gender, s.department, s.year_of_study,
+                h.name as preferred_hostel_name
+            FROM waitlist w
+            JOIN students s ON w.student_id = s.id
+            LEFT JOIN hostels h ON w.preferred_hostel_id = h.id
+            WHERE w.status = 'Waiting'
+            ORDER BY w.priority_order ASC
+        `).all();
+        res.json(waitlist);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/waitlist/:id/allocate', (req, res) => {
+    try {
+        const entry = db.prepare(`
+            SELECT w.*, s.gender, s.full_name, s.enrollment_no 
+            FROM waitlist w 
+            JOIN students s ON w.student_id = s.id 
+            WHERE w.id = ?
+        `).get(req.params.id);
+
+        if (!entry) return res.status(404).json({ error: 'Waitlist entry not found' });
+
+        const expectedType = entry.gender === 'Female' ? 'Girls' : 'Boys';
+        const vacantBed = db.prepare(`
+            SELECT b.id, b.bed_no, r.room_no, h.name as hostel_name
+            FROM beds b
+            JOIN rooms r ON b.room_id = r.id
+            JOIN hostels h ON r.hostel_id = h.id
+            WHERE b.status = 'Vacant' AND h.type = ?
+            ORDER BY h.id, r.room_no, b.bed_no
+            LIMIT 1
+        `).get(expectedType);
+
+        if (!vacantBed) {
+            return res.status(400).json({ error: `Still no vacant bed available in ${expectedType} hostels.` });
+        }
+
+        const allocTx = db.transaction(() => {
+            db.prepare("UPDATE beds SET status = 'Occupied' WHERE id = ?").run(vacantBed.id);
+            const newAlloc = db.prepare(`
+                INSERT INTO allocations (student_id, bed_id, start_date, status)
+                VALUES (?, ?, DATE('now'), 'Active')
+            `).run(entry.student_id, vacantBed.id);
+
+            db.prepare("UPDATE waitlist SET status = 'Allocated' WHERE id = ?").run(entry.id);
+
+            const dueDate = new Date();
+            dueDate.setDate(dueDate.getDate() + 30);
+            db.prepare(`
+                INSERT INTO fees (allocation_id, term, amount, due_date, status)
+                VALUES (?, 'Academic Term 2026-27', 25000, ?, 'Unpaid')
+            `).run(newAlloc.lastInsertRowid, dueDate.toISOString().split('T')[0]);
+
+            logAudit(req.session.user.id, req.session.user.email, 'WAITLIST_ALLOCATED', `Waitlisted student ${entry.full_name} allocated Bed ${vacantBed.bed_no} in ${vacantBed.hostel_name}.`);
+        });
+
+        allocTx();
+        res.json({ success: true, message: `Waitlisted student allocated Room ${vacantBed.room_no}, Bed ${vacantBed.bed_no}!` });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.delete('/waitlist/:id', (req, res) => {
+    try {
+        db.prepare("UPDATE waitlist SET status = 'Cancelled' WHERE id = ?").run(req.params.id);
+        res.json({ success: true, message: 'Waitlist entry removed' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 5. Transfer & Vacating Requests
 router.get('/requests', (req, res) => {
     try {
         const requests = db.prepare(`
@@ -422,14 +610,14 @@ router.get('/requests', (req, res) => {
 });
 
 router.post('/requests/:id/action', (req, res) => {
-    const { action, remarks, target_bed_id } = req.body; // action: 'Approve' | 'Reject'
+    const { action, remarks, target_bed_id } = req.body;
     if (!['Approve', 'Reject'].includes(action)) {
         return res.status(400).json({ error: 'Action must be Approve or Reject.' });
     }
 
     try {
         const request = db.prepare(`
-            SELECT req.*, a.bed_id as current_bed_id, s.gender
+            SELECT req.*, a.bed_id as current_bed_id, s.gender, s.full_name
             FROM room_requests req
             JOIN allocations a ON req.allocation_id = a.id
             JOIN students s ON req.student_id = s.id
@@ -444,12 +632,12 @@ router.post('/requests/:id/action', (req, res) => {
         if (action === 'Reject') {
             db.prepare("UPDATE room_requests SET status = 'Rejected', admin_remarks = ? WHERE id = ?")
                 .run(remarks || 'Rejected by Administrator', req.params.id);
+            logAudit(req.session.user.id, req.session.user.email, 'REQUEST_REJECT', `Rejected ${request.request_type} request for ${request.full_name}.`);
             return res.json({ success: true, message: 'Request rejected.' });
         }
 
         // Action is 'Approve'
         if (request.request_type === 'Vacate') {
-            // Check unpaid fees (BR-06)
             const unpaid = db.prepare(`
                 SELECT id, amount, status FROM fees 
                 WHERE allocation_id = ? AND status IN ('Unpaid', 'Overdue')
@@ -461,19 +649,19 @@ router.post('/requests/:id/action', (req, res) => {
                 });
             }
 
-            // Execute atomic vacate (FR-39)
             const vacateTx = db.transaction(() => {
                 db.prepare("UPDATE allocations SET status = 'Closed', end_date = DATE('now') WHERE id = ?").run(request.allocation_id);
                 db.prepare("UPDATE beds SET status = 'Vacant' WHERE id = ?").run(request.current_bed_id);
                 db.prepare("UPDATE room_requests SET status = 'Approved', admin_remarks = ? WHERE id = ?")
                     .run(remarks || 'Approved and vacated.', req.params.id);
+
+                logAudit(req.session.user.id, req.session.user.email, 'VACATE_APPROVE', `Vacated bed #${request.current_bed_id} for ${request.full_name}.`);
             });
             vacateTx();
             return res.json({ success: true, message: 'Vacating request approved. Bed released and allocation closed.' });
         }
 
         if (request.request_type === 'Transfer') {
-            // Must have a vacant target bed
             let targetBed = null;
             if (target_bed_id) {
                 targetBed = db.prepare(`
@@ -484,7 +672,6 @@ router.post('/requests/:id/action', (req, res) => {
                     WHERE b.id = ?
                 `).get(target_bed_id);
             } else {
-                // Find automatic vacant bed in preferred hostel or matching hostel
                 const expectedHostelType = request.gender === 'Female' ? 'Girls' : 'Boys';
                 let bedQuery = `
                     SELECT b.id, b.status, h.type as hostel_type
@@ -506,13 +693,10 @@ router.post('/requests/:id/action', (req, res) => {
                 return res.status(400).json({ error: 'No vacant bed is available for transfer (BR-07).' });
             }
 
-            // Atomic transfer (FR-38)
             const transferTx = db.transaction(() => {
-                // Close old allocation and free old bed
                 db.prepare("UPDATE allocations SET status = 'Closed', end_date = DATE('now') WHERE id = ?").run(request.allocation_id);
                 db.prepare("UPDATE beds SET status = 'Vacant' WHERE id = ?").run(request.current_bed_id);
 
-                // Create new allocation and occupy new bed
                 db.prepare("UPDATE beds SET status = 'Occupied' WHERE id = ?").run(targetBed.id);
                 db.prepare(`
                     INSERT INTO allocations (student_id, bed_id, start_date, status)
@@ -521,6 +705,8 @@ router.post('/requests/:id/action', (req, res) => {
 
                 db.prepare("UPDATE room_requests SET status = 'Approved', admin_remarks = ? WHERE id = ?")
                     .run(remarks || 'Transfer approved.', req.params.id);
+
+                logAudit(req.session.user.id, req.session.user.email, 'TRANSFER_APPROVE', `Transferred ${request.full_name} from Bed #${request.current_bed_id} to Bed #${targetBed.id}.`);
             });
 
             transferTx();
@@ -531,7 +717,7 @@ router.post('/requests/:id/action', (req, res) => {
     }
 });
 
-// 6. Fees & Payments (FR-40 to FR-50)
+// 6. Fees & Payments
 router.get('/fees', (req, res) => {
     try {
         const fees = db.prepare(`
@@ -571,6 +757,7 @@ router.post('/fees/:id/record-payment', (req, res) => {
             `).run(fee.id, payAmount, mode || 'Cash', ref);
 
             db.prepare("UPDATE fees SET status = 'Paid' WHERE id = ?").run(fee.id);
+            logAudit(req.session.user.id, req.session.user.email, 'FEE_PAYMENT_RECORD', `Recorded payment of ₹${payAmount} (${mode || 'Cash'}) for Fee #${fee.id}.`);
         });
 
         payTx();
@@ -580,7 +767,87 @@ router.post('/fees/:id/record-payment', (req, res) => {
     }
 });
 
-// 7. Wardens list (for assigning to hostels)
+// 7. Audit Logs Endpoint (FR-82, NFR-10)
+router.get('/audit-logs', (req, res) => {
+    try {
+        const logs = db.prepare('SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT 100').all();
+        res.json(logs);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 8. Institutional Report Exports (CSV) (FR-72 to FR-76)
+router.get('/reports/export-csv', (req, res) => {
+    const { type } = req.query; // 'occupancy' | 'fees' | 'complaints'
+    try {
+        if (type === 'occupancy') {
+            const data = db.prepare(`
+                SELECT h.name as Hostel, r.floor as Floor, r.room_no as Room, r.room_type as Type, b.bed_no as Bed, b.status as Status, s.full_name as Student
+                FROM beds b
+                JOIN rooms r ON b.room_id = r.id
+                JOIN hostels h ON r.hostel_id = h.id
+                LEFT JOIN allocations a ON b.id = a.bed_id AND a.status = 'Active'
+                LEFT JOIN students s ON a.student_id = s.id
+                ORDER BY h.name, r.floor, r.room_no, b.bed_no
+            `).all();
+
+            let csv = 'Hostel,Floor,Room,Type,Bed,Status,Student\n';
+            data.forEach(d => {
+                csv += `"${d.Hostel}",${d.Floor},"${d.Room}","${d.Type}","${d.Bed}","${d.Status}","${d.Student || ''}"\n`;
+            });
+            res.header('Content-Type', 'text/csv');
+            res.attachment('occupancy_report.csv');
+            return res.send(csv);
+        }
+
+        if (type === 'fees') {
+            const data = db.prepare(`
+                SELECT f.id as FeeID, s.enrollment_no as RollNo, s.full_name as Student, h.name as Hostel, f.term as Term, f.amount as Amount, f.due_date as DueDate, f.status as Status, p.transaction_ref as TxnRef
+                FROM fees f
+                JOIN allocations a ON f.allocation_id = a.id
+                JOIN students s ON a.student_id = s.id
+                JOIN beds b ON a.bed_id = b.id
+                JOIN rooms r ON b.room_id = r.id
+                JOIN hostels h ON r.hostel_id = h.id
+                LEFT JOIN payments p ON f.id = p.fee_id
+                ORDER BY f.id DESC
+            `).all();
+
+            let csv = 'FeeID,RollNo,Student,Hostel,Term,Amount,DueDate,Status,TxnRef\n';
+            data.forEach(d => {
+                csv += `${d.FeeID},"${d.RollNo}","${d.Student}","${d.Hostel}","${d.Term}",${d.Amount},"${d.DueDate}","${d.Status}","${d.TxnRef || ''}"\n`;
+            });
+            res.header('Content-Type', 'text/csv');
+            res.attachment('fees_collection_report.csv');
+            return res.send(csv);
+        }
+
+        if (type === 'complaints') {
+            const data = db.prepare(`
+                SELECT c.id as ID, c.created_at as Date, s.full_name as Student, h.name as Hostel, c.category as Category, c.priority as Priority, c.status as Status, c.assigned_to as Assigned, c.remarks as Remarks
+                FROM complaints c
+                JOIN students s ON c.student_id = s.id
+                JOIN hostels h ON c.hostel_id = h.id
+                ORDER BY c.created_at DESC
+            `).all();
+
+            let csv = 'ID,Date,Student,Hostel,Category,Priority,Status,Assigned,Remarks\n';
+            data.forEach(d => {
+                csv += `${d.ID},"${d.Date}","${d.Student}","${d.Hostel}","${d.Category}","${d.Priority}","${d.Status}","${d.Assigned || ''}","${(d.Remarks || '').replace(/"/g, '""')}"\n`;
+            });
+            res.header('Content-Type', 'text/csv');
+            res.attachment('complaints_report.csv');
+            return res.send(csv);
+        }
+
+        res.status(400).json({ error: 'Invalid report type' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 9. Wardens list
 router.get('/wardens', (req, res) => {
     try {
         const wardens = db.prepare("SELECT id, email FROM users WHERE role = 'warden' AND status = 'active'").all();

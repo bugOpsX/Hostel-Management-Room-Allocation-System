@@ -7,25 +7,67 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <style>
-        body { background-color: #f8f9fa; font-family: system-ui, -apple-system, sans-serif; }
-        .kpi-card { border: none; border-radius: 12px; }
-        .nav-pills .nav-link { border-radius: 8px; font-weight: 500; color: #495057; }
-        .nav-pills .nav-link.active { background-color: #ffc107; color: #212529; }
-        .table-responsive { background: white; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+        body { 
+            background-color: #f3f6f9; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            color: #2c3e50;
+        }
+        .kpi-card { 
+            border: none; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+            transition: transform 0.2s ease;
+        }
+        .kpi-card:hover { transform: translateY(-3px); }
+        .nav-pills .nav-link { 
+            border-radius: 8px; 
+            font-weight: 600; 
+            color: #495057; 
+            padding: 0.65rem 1.1rem;
+        }
+        .nav-pills .nav-link.active { 
+            background: linear-gradient(135deg, #f6d365 0%, #fda085 100%); 
+            color: #212529; 
+            font-weight: 700;
+        }
+        .table-responsive { 
+            background: white; 
+            border-radius: 10px; 
+            box-shadow: 0 2px 12px rgba(0,0,0,0.04); 
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+        .escalated-badge {
+            animation: pulse-red 2s infinite;
+        }
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.6); }
+            70% { box-shadow: 0 0 0 8px rgba(220, 53, 69, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+        }
     </style>
 </head>
 <body>
 
+    <!-- Toast Notification Container -->
+    <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100;">
+        <div id="wardenToast" class="toast align-items-center text-white border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body" id="toastMessage">Notification</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    </div>
+
     <!-- Top Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark px-3 py-2 shadow-sm">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark px-3 py-2 shadow-sm sticky-top">
         <div class="container-fluid">
             <a class="navbar-brand d-flex align-items-center" href="/warden.html">
-                <i class="bi bi-shield-check me-2 text-warning"></i> HMRAS <span class="badge bg-warning text-dark ms-2">Warden Portal</span>
+                <i class="bi bi-shield-check me-2 text-warning"></i> HMRAS <span class="badge bg-warning text-dark ms-2 px-2">Warden Portal</span>
             </a>
             <div class="d-flex align-items-center gap-3">
                 <span class="badge bg-secondary fs-6 py-2 px-3" id="assignedHostelBadge">Assigned Hostel: Loading...</span>
                 <span class="text-light small d-none d-md-inline" id="userEmailDisplay"></span>
-                <button class="btn btn-outline-light btn-sm" onclick="logout()"><i class="bi bi-box-arrow-right me-1"></i>Logout</button>
+                <button class="btn btn-outline-light btn-sm px-3" onclick="logout()"><i class="bi bi-box-arrow-right me-1"></i>Logout</button>
             </div>
         </div>
     </nav>
@@ -35,30 +77,30 @@
         <!-- KPI Cards -->
         <div class="row g-3 mb-4">
             <div class="col-md-3">
-                <div class="card kpi-card bg-primary text-white p-3 shadow-sm">
-                    <div class="small opacity-75 fw-bold text-uppercase">Hostel Occupancy</div>
-                    <h3 class="fw-bold mb-0" id="wardenBeds">0 / 0</h3>
+                <div class="card kpi-card bg-primary text-white p-3">
+                    <div class="small fw-bold opacity-75 text-uppercase mb-1">Hostel Occupancy</div>
+                    <h3 class="fw-bold mb-1" id="wardenBeds">0 / 0</h3>
                     <small class="opacity-75" id="wardenVacant">0 Vacant Beds</small>
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="card kpi-card bg-danger text-white p-3 shadow-sm">
-                    <div class="small opacity-75 fw-bold text-uppercase">Open Complaints</div>
-                    <h3 class="fw-bold mb-0" id="wardenComplaints">0</h3>
-                    <small class="opacity-75">Needs attention</small>
+                <div class="card kpi-card bg-danger text-white p-3">
+                    <div class="small fw-bold opacity-75 text-uppercase mb-1">Open Complaints</div>
+                    <h3 class="fw-bold mb-1" id="wardenComplaints">0</h3>
+                    <small class="opacity-75" id="wardenEscalated">0 Escalated (>72h)</small>
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="card kpi-card bg-info text-dark p-3 shadow-sm">
-                    <div class="small opacity-75 fw-bold text-uppercase">Pending Recommendations</div>
-                    <h3 class="fw-bold mb-0" id="wardenRequests">0</h3>
-                    <small class="opacity-75">Transfer / Vacate requests</small>
+                <div class="card kpi-card bg-info text-dark p-3">
+                    <div class="small fw-bold opacity-75 text-uppercase mb-1">Pending Recommendations</div>
+                    <h3 class="fw-bold mb-1" id="wardenRequests">0</h3>
+                    <small class="opacity-75">Room changes awaiting review</small>
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="card kpi-card bg-success text-white p-3 shadow-sm">
-                    <div class="small opacity-75 fw-bold text-uppercase">Visitors Currently Inside</div>
-                    <h3 class="fw-bold mb-0" id="wardenVisitors">0</h3>
+                <div class="card kpi-card bg-success text-white p-3">
+                    <div class="small fw-bold opacity-75 text-uppercase mb-1">Visitors Inside</div>
+                    <h3 class="fw-bold mb-1" id="wardenVisitors">0</h3>
                     <small class="opacity-75">Visiting hours: 09:00 - 19:00</small>
                 </div>
             </div>
@@ -68,16 +110,16 @@
         <div class="card border-0 shadow-sm p-3">
             <ul class="nav nav-pills mb-4 flex-wrap gap-2" role="tablist">
                 <li class="nav-item">
-                    <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tabComplaints"><i class="bi bi-tools me-1"></i> Complaints Management</button>
+                    <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tabComplaints"><i class="bi bi-tools me-1"></i> Complaints Queue</button>
                 </li>
                 <li class="nav-item">
                     <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabWardenRequests"><i class="bi bi-card-checklist me-1"></i> Transfer & Vacate Requests</button>
                 </li>
                 <li class="nav-item">
-                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabVisitors"><i class="bi bi-person-lines-fill me-1"></i> Visitor Log</button>
+                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabVisitors"><i class="bi bi-person-lines-fill me-1"></i> Visitor Register (Digital Passes)</button>
                 </li>
                 <li class="nav-item">
-                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabWardenNotices"><i class="bi bi-megaphone me-1"></i> Post Notice</button>
+                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabWardenNotices"><i class="bi bi-megaphone me-1"></i> Post Hostel Notice</button>
                 </li>
             </ul>
 
@@ -86,7 +128,7 @@
                 <!-- 1. COMPLAINTS TAB -->
                 <div class="tab-pane fade show active" id="tabComplaints">
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5 class="fw-bold mb-0"><i class="bi bi-tools me-2"></i>Hostel Complaints Queue</h5>
+                        <h5 class="fw-bold mb-0"><i class="bi bi-tools me-2"></i>Resident Maintenance Requests</h5>
                     </div>
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0">
@@ -138,7 +180,7 @@
                 <!-- 3. VISITORS TAB -->
                 <div class="tab-pane fade" id="tabVisitors">
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5 class="fw-bold mb-0"><i class="bi bi-person-lines-fill me-2"></i>Visitor Entry & Exit Register</h5>
+                        <h5 class="fw-bold mb-0"><i class="bi bi-person-lines-fill me-2"></i>Visitor Register & Digital Passes</h5>
                         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addVisitorModal">
                             <i class="bi bi-plus-circle me-1"></i> Log New Visitor Entry
                         </button>
@@ -147,9 +189,10 @@
                         <table class="table table-hover align-middle mb-0">
                             <thead class="table-light">
                                 <tr>
+                                    <th>Pass Code</th>
                                     <th>Visitor Name</th>
                                     <th>Relation</th>
-                                    <th>ID Proof</th>
+                                    <th>ID Proof (Masked)</th>
                                     <th>Student Visited</th>
                                     <th>Purpose</th>
                                     <th>Entry Time</th>
@@ -159,7 +202,7 @@
                                 </tr>
                             </thead>
                             <tbody id="visitorsTableBody">
-                                <tr><td colspan="9" class="text-center py-3 text-muted">Loading visitor records...</td></tr>
+                                <tr><td colspan="10" class="text-center py-3 text-muted">Loading visitor records...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -169,7 +212,7 @@
                 <div class="tab-pane fade" id="tabWardenNotices">
                     <div class="row">
                         <div class="col-md-6">
-                            <div class="card p-4 border bg-light">
+                            <div class="card p-4 border bg-light shadow-sm">
                                 <h6 class="fw-bold mb-3"><i class="bi bi-pencil-square me-1"></i> Post Announcement for Your Hostel</h6>
                                 <form id="wardenNoticeForm">
                                     <div class="mb-3">
@@ -180,8 +223,8 @@
                                         <label class="form-label small fw-semibold">Content *</label>
                                         <textarea id="wNoticeBody" class="form-control" rows="4" placeholder="Detailed message for residents..." required></textarea>
                                     </div>
-                                    <button type="submit" class="btn btn-warning w-100 fw-semibold">
-                                        <i class="bi bi-megaphone me-1"></i> Publish to My Hostel Residents
+                                    <button type="submit" class="btn btn-warning w-100 fw-bold">
+                                        <i class="bi bi-megaphone me-1"></i> Publish to Hostel Residents
                                     </button>
                                 </form>
                             </div>
@@ -264,7 +307,7 @@
                             </div>
                         </div>
                         <div class="mb-2">
-                            <label class="form-label small fw-semibold">Select Student Visited *</label>
+                            <label class="form-label small fw-semibold">Select Resident Visited *</label>
                             <select id="visStudentSelect" class="form-select" required></select>
                         </div>
                         <div class="mb-3">
@@ -278,15 +321,45 @@
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Log Entry</button>
+                        <button type="submit" class="btn btn-primary">Generate Pass & Check In</button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
 
+    <!-- Digital QR Visitor Pass Modal -->
+    <div class="modal fade" id="passModal" tabindex="-1">
+        <div class="modal-dialog modal-sm text-center">
+            <div class="modal-content p-3">
+                <div class="modal-header border-0 pb-0">
+                    <h5 class="modal-title fw-bold text-center w-100">Visitor Pass</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body py-2">
+                    <div class="bg-light p-3 rounded mb-2 border">
+                        <i class="bi bi-qr-code fs-1 text-dark"></i>
+                        <h5 class="fw-bold font-monospace mt-2 mb-0" id="passCodeDisplay">VPASS-000000</h5>
+                    </div>
+                    <p class="small text-muted mb-0">Show this digital pass code to hostel security when leaving the premises.</p>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-primary btn-sm w-100" data-bs-dismiss="modal">Done</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        function showToast(message, type = 'success') {
+            const toastEl = document.getElementById('wardenToast');
+            document.getElementById('toastMessage').textContent = message;
+            toastEl.className = `toast align-items-center text-white border-0 bg-${type === 'error' ? 'danger' : 'success'}`;
+            const toast = new bootstrap.Toast(toastEl, { delay: 3500 });
+            toast.show();
+        }
+
         async function init() {
             try {
                 const res = await fetch('/api/auth/me');
@@ -323,7 +396,8 @@
             document.getElementById('assignedHostelBadge').textContent = `Hostel: ${data.hostel.name} (${data.hostel.type})`;
             document.getElementById('wardenBeds').textContent = `${data.bedStats.occupied} / ${data.bedStats.total_beds}`;
             document.getElementById('wardenVacant').textContent = `${data.bedStats.vacant} Vacant Beds`;
-            document.getElementById('wardenComplaints').textContent = data.openComplaints;
+            document.getElementById('wardenComplaints').textContent = data.complaints.open;
+            document.getElementById('wardenEscalated').textContent = `${data.complaints.escalated} Escalated (>72h)`;
             document.getElementById('wardenRequests').textContent = data.pendingRequests;
             document.getElementById('wardenVisitors').textContent = data.activeVisitors;
         }
@@ -337,7 +411,7 @@
                 return;
             }
             tbody.innerHTML = complaints.map(c => `
-                <tr>
+                <tr class="${c.is_escalated ? 'table-danger' : ''}">
                     <td>#${c.id}</td>
                     <td class="small">${new Date(c.created_at).toLocaleDateString()}</td>
                     <td><strong>${c.student_name}</strong><br><span class="text-muted small">Room ${c.room_no || '—'} (${c.bed_no || '—'})</span></td>
@@ -347,6 +421,7 @@
                         <span class="badge ${c.priority === 'High' ? 'bg-danger' : (c.priority === 'Medium' ? 'bg-warning text-dark' : 'bg-info text-dark')}">
                             ${c.priority}
                         </span>
+                        ${c.is_escalated ? '<span class="badge bg-danger escalated-badge ms-1">Escalated</span>' : ''}
                     </td>
                     <td class="small">${c.assigned_to || '<span class="text-muted">Unassigned</span>'}</td>
                     <td>
@@ -388,6 +463,7 @@
             });
             if (res.ok) {
                 bootstrap.Modal.getInstance(document.getElementById('updateComplaintModal')).hide();
+                showToast('Complaint updated successfully.');
                 loadComplaints();
                 loadDashboard();
             }
@@ -431,6 +507,7 @@
                 body: JSON.stringify({ recommendation: rec, remarks })
             });
             if (res.ok) {
+                showToast('Recommendation submitted to Administrator.');
                 loadWardenRequests();
                 loadDashboard();
             }
@@ -441,14 +518,15 @@
             const visitors = await res.json();
             const tbody = document.getElementById('visitorsTableBody');
             if (visitors.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" class="text-center py-3 text-muted">No visitor records today.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" class="text-center py-3 text-muted">No visitor records today.</td></tr>';
                 return;
             }
             tbody.innerHTML = visitors.map(v => `
                 <tr>
+                    <td><span class="badge bg-dark font-monospace">${v.pass_code || 'VPASS-OLD'}</span></td>
                     <td class="fw-semibold">${v.visitor_name}</td>
                     <td>${v.relation}</td>
-                    <td class="small text-muted">${v.id_proof}</td>
+                    <td class="small text-muted font-monospace">${v.id_proof_masked || v.id_proof}</td>
                     <td>${v.student_name} (${v.enrollment_no})</td>
                     <td class="small">${v.purpose}</td>
                     <td class="small">${new Date(v.in_time).toLocaleTimeString()}</td>
@@ -472,13 +550,13 @@
         async function recordVisitorExit(id) {
             const res = await fetch(`/api/warden/visitors/${id}/out`, { method: 'POST' });
             if (res.ok) {
+                showToast('Visitor exit recorded successfully.');
                 loadVisitors();
                 loadDashboard();
             }
         }
 
         async function loadStudentsForVisitor() {
-            // Find students residing in this hostel from complaints or general api
             const res = await fetch('/api/admin/students');
             if (res.ok) {
                 const students = await res.json();
@@ -507,13 +585,16 @@
             if (res.ok) {
                 bootstrap.Modal.getInstance(document.getElementById('addVisitorModal')).hide();
                 document.getElementById('addVisitorForm').reset();
+                showToast('Visitor entry logged.');
+                document.getElementById('passCodeDisplay').textContent = data.passCode;
+                new bootstrap.Modal(document.getElementById('passModal')).show();
                 loadVisitors();
                 loadDashboard();
             } else {
                 if (data.error && data.error.includes('outside visiting hours')) {
                     document.getElementById('overrideDiv').style.display = 'block';
                 }
-                alert(data.error);
+                showToast(data.error, 'error');
             }
         });
 
@@ -529,7 +610,7 @@
                 body: JSON.stringify(payload)
             });
             if (res.ok) {
-                alert('Notice published to your hostel residents successfully.');
+                showToast('Notice published to hostel residents.');
                 document.getElementById('wardenNoticeForm').reset();
             }
         });

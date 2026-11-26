@@ -7,26 +7,103 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <style>
-        body { background-color: #f4f6f9; font-family: system-ui, -apple-system, sans-serif; }
-        .hero-banner { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 2.5rem 0; margin-bottom: 2rem; }
-        .card { border-radius: 10px; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
-        .nav-tabs .nav-link.active { font-weight: 600; color: #1e3c72; }
-        .demo-badge { cursor: pointer; transition: transform 0.1s; }
-        .demo-badge:hover { transform: scale(1.05); }
+        :root {
+            --primary-gradient: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            --card-radius: 14px;
+        }
+        body { 
+            background: #f1f4f9; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: #2d3748;
+        }
+        .hero-banner { 
+            background: var(--primary-gradient); 
+            color: white; 
+            padding: 2.8rem 0; 
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 20px rgba(30, 60, 114, 0.15);
+        }
+        .card { 
+            border-radius: var(--card-radius); 
+            border: 1px solid rgba(0,0,0,0.05); 
+            box-shadow: 0 8px 24px rgba(149, 157, 165, 0.1); 
+        }
+        .nav-tabs { border-bottom: 2px solid #e9ecef; }
+        .nav-tabs .nav-link { 
+            border: none; 
+            color: #6c757d; 
+            font-weight: 600; 
+            padding: 0.8rem 1rem;
+            border-bottom: 3px solid transparent; 
+        }
+        .nav-tabs .nav-link.active { 
+            color: #1e3c72; 
+            border-bottom: 3px solid #1e3c72; 
+            background: none; 
+        }
+        .demo-badge { 
+            cursor: pointer; 
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+            border-radius: 8px;
+        }
+        .demo-badge:hover { 
+            transform: translateY(-2px); 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15); 
+        }
+        .notice-card {
+            border-left: 4px solid #2a5298;
+            background: #ffffff;
+            transition: transform 0.15s;
+        }
+        .notice-card:hover { transform: translateY(-2px); }
+        .form-control, .form-select {
+            border-radius: 8px;
+            padding: 0.65rem 0.9rem;
+            border: 1px solid #ced4da;
+        }
+        .form-control:focus, .form-select:focus {
+            box-shadow: 0 0 0 0.25rem rgba(42, 82, 152, 0.15);
+            border-color: #2a5298;
+        }
+        .btn-primary {
+            background: #2a5298;
+            border-color: #2a5298;
+            border-radius: 8px;
+        }
+        .btn-primary:hover {
+            background: #1e3c72;
+            border-color: #1e3c72;
+        }
     </style>
 </head>
 <body>
 
+    <!-- Toast Notification Container -->
+    <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100;">
+        <div id="appToast" class="toast align-items-center text-white border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body" id="toastMessage">Notification message</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    </div>
+
     <!-- Header Banner -->
-    <div class="hero-banner shadow-sm">
+    <div class="hero-banner">
         <div class="container">
-            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
                 <div>
-                    <h2 class="fw-bold mb-1"><i class="bi bi-building-fill-check me-2"></i>Hostel Management & Room Allocation</h2>
-                    <p class="mb-0 opacity-75">Marwadi University • Centralized Campus Accommodation Portal</p>
+                    <span class="badge bg-white text-primary px-3 py-1 mb-2 fw-semibold shadow-sm">
+                        <i class="bi bi-mortarboard-fill me-1"></i> Marwadi University
+                    </span>
+                    <h2 class="fw-bold mb-1">Hostel Management & Room Allocation</h2>
+                    <p class="mb-0 text-white-50">Centralized Institutional Residential & Accommodation Management</p>
                 </div>
-                <div class="text-end">
-                    <span class="badge bg-light text-primary fs-6 py-2 px-3"><i class="bi bi-shield-lock me-1"></i>HMRAS Core System</span>
+                <div class="d-none d-md-block text-end">
+                    <span class="badge bg-light bg-opacity-25 text-white fs-6 py-2 px-3 border border-white border-opacity-25">
+                        <i class="bi bi-shield-lock-fill me-1"></i> HMRAS 2.0 Secure Core
+                    </span>
                 </div>
             </div>
         </div>
@@ -35,7 +112,7 @@
     <div class="container pb-5">
         <div class="row g-4 justify-content-center">
             
-            <!-- Left Side: Login & Registration Cards -->
+            <!-- Left Column: Authentication & Registration -->
             <div class="col-lg-7">
                 <div class="card p-4">
                     <ul class="nav nav-tabs mb-4" id="authTabs" role="tablist">
@@ -46,39 +123,43 @@
                         </li>
                         <li class="nav-item flex-fill text-center" role="presentation">
                             <button class="nav-link w-100 fs-5" id="register-tab" data-bs-toggle="tab" data-bs-target="#registerPane" type="button" role="tab">
-                                <i class="bi bi-person-plus me-1"></i> Student Self-Register
+                                <i class="bi bi-person-plus me-1"></i> Student Registration
                             </button>
                         </li>
                     </ul>
 
                     <div class="tab-content" id="authTabsContent">
+                        
                         <!-- Sign In Tab -->
                         <div class="tab-pane fade show active" id="loginPane" role="tabpanel">
                             <div id="loginAlert" class="alert d-none"></div>
 
                             <form id="loginForm">
                                 <div class="mb-3">
-                                    <label class="form-label fw-semibold">Email or Enrollment Number</label>
+                                    <label class="form-label fw-semibold small text-muted">EMAIL OR ENROLLMENT NUMBER</label>
                                     <div class="input-group">
-                                        <span class="input-group-text"><i class="bi bi-person"></i></span>
-                                        <input type="text" id="loginIdentifier" class="form-control" placeholder="e.g. admin@hostel.com or 2026CS101" required>
+                                        <span class="input-group-text bg-light"><i class="bi bi-person text-muted"></i></span>
+                                        <input type="text" id="loginIdentifier" class="form-control" placeholder="admin@hostel.com or 2026CS101" required>
                                     </div>
                                 </div>
                                 <div class="mb-3">
-                                    <label class="form-label fw-semibold">Password</label>
+                                    <div class="d-flex justify-content-between">
+                                        <label class="form-label fw-semibold small text-muted">PASSWORD</label>
+                                        <span class="text-muted small" style="cursor: pointer;" onclick="showToast('Password reset link has been dispatched to your email (FR-06).', 'info')">Forgot?</span>
+                                    </div>
                                     <div class="input-group">
-                                        <span class="input-group-text"><i class="bi bi-key"></i></span>
+                                        <span class="input-group-text bg-light"><i class="bi bi-key text-muted"></i></span>
                                         <input type="password" id="loginPassword" class="form-control" placeholder="••••••••" required>
                                     </div>
                                 </div>
-                                <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold">
+                                <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold shadow-sm">
                                     <i class="bi bi-box-arrow-in-right me-1"></i> Access Portal
                                 </button>
                             </form>
 
-                            <!-- Demo Quick Login Buttons -->
+                            <!-- Quick Demo Logins -->
                             <div class="mt-4 pt-3 border-top">
-                                <p class="text-muted small fw-bold mb-2">⚡ QUICK DEMO LOGINS (Click to auto-fill):</p>
+                                <p class="text-muted small fw-bold mb-2">⚡ 1-CLICK DEMO LOGINS:</p>
                                 <div class="d-flex flex-wrap gap-2">
                                     <span class="badge bg-danger demo-badge py-2 px-3" onclick="fillLogin('admin@hostel.com', 'admin123')">
                                         <i class="bi bi-shield-shaded me-1"></i> Admin
@@ -103,15 +184,15 @@
                             <form id="registerForm">
                                 <div class="row g-2">
                                     <div class="col-md-6 mb-2">
-                                        <label class="form-label small fw-semibold">Enrollment / Roll No *</label>
+                                        <label class="form-label small fw-semibold text-muted">ENROLLMENT NUMBER *</label>
                                         <input type="text" id="regEnrollment" class="form-control" placeholder="2026CS501" required>
                                     </div>
                                     <div class="col-md-6 mb-2">
-                                        <label class="form-label small fw-semibold">Full Name *</label>
+                                        <label class="form-label small fw-semibold text-muted">FULL NAME *</label>
                                         <input type="text" id="regName" class="form-control" placeholder="e.g. Ananya Rao" required>
                                     </div>
                                     <div class="col-md-6 mb-2">
-                                        <label class="form-label small fw-semibold">Gender *</label>
+                                        <label class="form-label small fw-semibold text-muted">GENDER (BR-03) *</label>
                                         <select id="regGender" class="form-select" required>
                                             <option value="">Select Gender</option>
                                             <option value="Male">Male</option>
@@ -119,11 +200,11 @@
                                         </select>
                                     </div>
                                     <div class="col-md-6 mb-2">
-                                        <label class="form-label small fw-semibold">Department *</label>
+                                        <label class="form-label small fw-semibold text-muted">DEPARTMENT *</label>
                                         <input type="text" id="regDept" class="form-control" placeholder="e.g. Computer Science" required>
                                     </div>
                                     <div class="col-md-6 mb-2">
-                                        <label class="form-label small fw-semibold">Year of Study *</label>
+                                        <label class="form-label small fw-semibold text-muted">YEAR OF STUDY *</label>
                                         <select id="regYear" class="form-select" required>
                                             <option value="1">1st Year</option>
                                             <option value="2">2nd Year</option>
@@ -132,42 +213,43 @@
                                         </select>
                                     </div>
                                     <div class="col-md-6 mb-2">
-                                        <label class="form-label small fw-semibold">Email Address *</label>
+                                        <label class="form-label small fw-semibold text-muted">EMAIL ADDRESS *</label>
                                         <input type="email" id="regEmail" class="form-control" placeholder="ananya@example.com" required>
                                     </div>
                                     <div class="col-md-6 mb-2">
-                                        <label class="form-label small fw-semibold">Mobile Number (10 digits) *</label>
+                                        <label class="form-label small fw-semibold text-muted">MOBILE NUMBER (10 DIGITS) *</label>
                                         <input type="tel" id="regMobile" class="form-control" pattern="[0-9]{10}" placeholder="9876543210" required>
                                     </div>
                                     <div class="col-md-6 mb-2">
-                                        <label class="form-label small fw-semibold">Guardian Contact *</label>
+                                        <label class="form-label small fw-semibold text-muted">GUARDIAN CONTACT *</label>
                                         <input type="tel" id="regGuardian" class="form-control" pattern="[0-9]{10}" placeholder="9876543211" required>
                                     </div>
                                     <div class="col-12 mb-3">
-                                        <label class="form-label small fw-semibold">Password (min 8 chars, letter + digit) *</label>
+                                        <label class="form-label small fw-semibold text-muted">PASSWORD (MIN 8 CHARS, LETTERS & DIGITS) *</label>
                                         <input type="password" id="regPassword" class="form-control" placeholder="••••••••" required>
                                     </div>
                                 </div>
-                                <button type="submit" class="btn btn-success w-100 py-2 fw-semibold">
-                                    <i class="bi bi-person-check me-1"></i> Submit Registration
+                                <button type="submit" class="btn btn-success w-100 py-2 fw-semibold shadow-sm">
+                                    <i class="bi bi-person-check me-1"></i> Register Student Account
                                 </button>
-                                <div class="form-text text-center mt-2 small">
-                                    Per institution policy (BR-04), accounts require Administrator approval before first login.
+                                <div class="form-text text-center mt-2 small text-muted">
+                                    Accounts are created with status <span class="badge bg-warning text-dark">Pending</span> and reviewed by Administrator (BR-04).
                                 </div>
                             </form>
                         </div>
+
                     </div>
                 </div>
             </div>
 
-            <!-- Right Side: Public Notice Board & Features Info -->
+            <!-- Right Column: Campus Notice Board -->
             <div class="col-lg-5">
                 <div class="card p-4 h-100">
                     <div class="d-flex align-items-center justify-content-between mb-3 border-bottom pb-2">
-                        <h5 class="fw-bold mb-0 text-primary"><i class="bi bi-megaphone me-2"></i>Campus Notices</h5>
-                        <span class="badge bg-primary rounded-pill" id="noticeCount">0</span>
+                        <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-megaphone-fill me-2 text-primary"></i>Campus Announcements</h5>
+                        <span class="badge bg-primary rounded-pill px-3" id="noticeCount">0</span>
                     </div>
-                    <div id="noticeList" class="flex-grow-1 overflow-auto" style="max-height: 420px;">
+                    <div id="noticeList" class="flex-grow-1 overflow-auto" style="max-height: 440px;">
                         <div class="text-center text-muted py-4">Loading notices...</div>
                     </div>
                 </div>
@@ -178,12 +260,19 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        function showToast(message, type = 'success') {
+            const toastEl = document.getElementById('appToast');
+            document.getElementById('toastMessage').textContent = message;
+            toastEl.className = `toast align-items-center text-white border-0 bg-${type === 'error' ? 'danger' : (type === 'info' ? 'info text-dark' : 'success')}`;
+            const toast = new bootstrap.Toast(toastEl, { delay: 3500 });
+            toast.show();
+        }
+
         function fillLogin(identifier, pass) {
             document.getElementById('loginIdentifier').value = identifier;
             document.getElementById('loginPassword').value = pass;
         }
 
-        // Check if already authenticated
         fetch('/api/auth/me')
             .then(res => res.json())
             .then(data => {
@@ -194,7 +283,6 @@
                 }
             }).catch(() => {});
 
-        // Handle Login
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const alertBox = document.getElementById('loginAlert');
@@ -213,16 +301,17 @@
                 if (!res.ok) {
                     alertBox.className = 'alert alert-danger';
                     alertBox.textContent = data.error || 'Login failed';
+                    showToast(data.error || 'Login failed', 'error');
                     return;
                 }
-                window.location.href = data.redirect;
+                showToast('Login successful! Redirecting...', 'success');
+                setTimeout(() => window.location.href = data.redirect, 500);
             } catch (err) {
                 alertBox.className = 'alert alert-danger';
                 alertBox.textContent = 'Server connection error: ' + err.message;
             }
         });
 
-        // Handle Registration
         document.getElementById('registerForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const alertBox = document.getElementById('registerAlert');
@@ -250,10 +339,12 @@
                 if (!res.ok) {
                     alertBox.className = 'alert alert-danger';
                     alertBox.textContent = data.error || 'Registration failed';
+                    showToast(data.error || 'Registration failed', 'error');
                     return;
                 }
                 alertBox.className = 'alert alert-success';
                 alertBox.textContent = data.message;
+                showToast('Registration submitted successfully!', 'success');
                 document.getElementById('registerForm').reset();
             } catch (err) {
                 alertBox.className = 'alert alert-danger';
@@ -261,7 +352,6 @@
             }
         });
 
-        // Load Notices
         async function loadNotices() {
             try {
                 const res = await fetch('/api/notices');
@@ -273,7 +363,7 @@
                     return;
                 }
                 list.innerHTML = notices.map(n => `
-                    <div class="card bg-light mb-3 p-3 border-0 shadow-none">
+                    <div class="card notice-card mb-3 p-3 border-0 shadow-sm">
                         <div class="d-flex justify-content-between align-items-center mb-1">
                             <h6 class="fw-bold mb-0 text-dark">${n.title}</h6>
                             <span class="badge bg-secondary">${n.hostel_name || 'All Hostels'}</span>

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const db = require('../db');
+const { logAudit } = require('../utils/audit');
 
 // POST /api/auth/register (Student self-registration per FR-01, FR-02, FR-03)
 router.post('/register', (req, res) => {
@@ -23,7 +24,6 @@ router.post('/register', (req, res) => {
     }
 
     try {
-        // Check uniqueness of email and enrollment_no
         const existingUser = db.prepare('SELECT id FROM users WHERE email = ?').get(email.trim().toLowerCase());
         if (existingUser) {
             return res.status(400).json({ error: 'An account with this email address already exists.' });
@@ -36,7 +36,6 @@ router.post('/register', (req, res) => {
 
         const password_hash = bcrypt.hashSync(password, 10);
 
-        // Atomic transaction: create user + student profile
         const registerTx = db.transaction(() => {
             const userRes = db.prepare(`
                 INSERT INTO users (email, password_hash, role, status)
@@ -53,6 +52,7 @@ router.post('/register', (req, res) => {
                 department.trim(), parseInt(year_of_study, 10), mobile.trim(), guardian_contact.trim()
             );
 
+            logAudit(userId, email.trim().toLowerCase(), 'STUDENT_REGISTER', `Student ${full_name} (${enrollment_no}) registered with status Pending.`);
             return userId;
         });
 
@@ -68,7 +68,7 @@ router.post('/register', (req, res) => {
     }
 });
 
-// POST /api/auth/login (FR-04)
+// POST /api/auth/login (FR-04, FR-05: Account lockout after 5 failed attempts)
 router.post('/login', (req, res) => {
     const { identifier, password } = req.body;
 
@@ -77,7 +77,6 @@ router.post('/login', (req, res) => {
     }
 
     try {
-        // Look up by email first, or by student enrollment number
         let user = db.prepare('SELECT * FROM users WHERE email = ?').get(identifier.trim().toLowerCase());
 
         if (!user) {
@@ -91,10 +90,34 @@ router.post('/login', (req, res) => {
             return res.status(401).json({ error: 'Invalid credentials.' });
         }
 
+        // Check account lockout (FR-05)
+        if (user.locked_until && new Date(user.locked_until) > new Date()) {
+            const remainingMinutes = Math.ceil((new Date(user.locked_until) - new Date()) / 60000);
+            return res.status(403).json({
+                error: `Account is temporarily locked due to 5 consecutive failed login attempts. Please try again in ${remainingMinutes} minute(s) (FR-05).`
+            });
+        }
+
         const match = bcrypt.compareSync(password, user.password_hash);
         if (!match) {
-            return res.status(401).json({ error: 'Invalid credentials.' });
+            // Increment failed attempts
+            const newAttempts = (user.failed_attempts || 0) + 1;
+            if (newAttempts >= 5) {
+                const lockTime = new Date(Date.now() + 15 * 60000).toISOString();
+                db.prepare('UPDATE users SET failed_attempts = ?, locked_until = ? WHERE id = ?')
+                    .run(newAttempts, lockTime, user.id);
+                logAudit(user.id, user.email, 'ACCOUNT_LOCKED', 'Account locked for 15 minutes due to 5 failed login attempts.');
+                return res.status(403).json({
+                    error: 'Account locked for 15 minutes after 5 consecutive failed login attempts (FR-05).'
+                });
+            } else {
+                db.prepare('UPDATE users SET failed_attempts = ? WHERE id = ?').run(newAttempts, user.id);
+                return res.status(401).json({ error: `Invalid credentials. (${5 - newAttempts} attempts remaining before temporary lockout).` });
+            }
         }
+
+        // Reset failed attempts on success
+        db.prepare('UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE id = ?').run(user.id);
 
         if (user.status === 'pending') {
             return res.status(403).json({ error: 'Your account is pending verification by an Administrator.' });
@@ -113,7 +136,6 @@ router.post('/login', (req, res) => {
             hostelInfo = db.prepare('SELECT * FROM hostels WHERE warden_id = ?').get(user.id);
         }
 
-        // Store session
         req.session.user = {
             id: user.id,
             email: user.email,
@@ -121,6 +143,8 @@ router.post('/login', (req, res) => {
             student: studentInfo,
             hostel: hostelInfo
         };
+
+        logAudit(user.id, user.email, 'LOGIN_SUCCESS', `User logged in with role: ${user.role}`);
 
         res.json({
             success: true,
@@ -135,6 +159,9 @@ router.post('/login', (req, res) => {
 
 // POST /api/auth/logout (FR-07)
 router.post('/logout', (req, res) => {
+    if (req.session && req.session.user) {
+        logAudit(req.session.user.id, req.session.user.email, 'LOGOUT', 'User logged out.');
+    }
     req.session.destroy(err => {
         if (err) return res.status(500).json({ error: 'Could not log out' });
         res.clearCookie('connect.sid');
@@ -147,7 +174,6 @@ router.get('/me', (req, res) => {
     if (!req.session || !req.session.user) {
         return res.status(401).json({ authenticated: false });
     }
-    // Refresh student/hostel data dynamically
     const user = db.prepare('SELECT id, email, role, status FROM users WHERE id = ?').get(req.session.user.id);
     let student = null;
     let hostel = null;

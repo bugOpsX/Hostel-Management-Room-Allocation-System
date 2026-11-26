@@ -2,15 +2,15 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const { requireWarden } = require('../middleware/auth');
+const { logAudit } = require('../utils/audit');
 
 router.use(requireWarden);
 
-// Helper to get warden's assigned hostel
 function getWardenHostel(userId) {
     return db.prepare('SELECT * FROM hostels WHERE warden_id = ?').get(userId);
 }
 
-// 1. Warden Dashboard
+// 1. Warden Dashboard (FR-69)
 router.get('/dashboard', (req, res) => {
     try {
         const hostel = getWardenHostel(req.session.user.id);
@@ -29,10 +29,14 @@ router.get('/dashboard', (req, res) => {
             WHERE r.hostel_id = ?
         `).get(hostel.id);
 
-        const openComplaints = db.prepare(`
-            SELECT COUNT(*) as count FROM complaints 
+        // Open & Escalated complaints count (BR-10)
+        const complaintStats = db.prepare(`
+            SELECT 
+                COUNT(*) as total_open,
+                SUM(CASE WHEN datetime(created_at, '+72 hours') <= datetime('now') THEN 1 ELSE 0 END) as escalated
+            FROM complaints 
             WHERE hostel_id = ? AND status != 'Resolved'
-        `).get(hostel.id).count;
+        `).get(hostel.id);
 
         const pendingRequests = db.prepare(`
             SELECT COUNT(*) as count FROM room_requests req
@@ -51,7 +55,10 @@ router.get('/dashboard', (req, res) => {
             assigned: true,
             hostel,
             bedStats,
-            openComplaints,
+            complaints: {
+                open: complaintStats.total_open || 0,
+                escalated: complaintStats.escalated || 0
+            },
             pendingRequests,
             activeVisitors
         });
@@ -60,7 +67,7 @@ router.get('/dashboard', (req, res) => {
     }
 });
 
-// 2. Complaints Management (FR-54)
+// 2. Complaints Management (FR-54, BR-10: 72h escalated indicator)
 router.get('/complaints', (req, res) => {
     try {
         const hostel = getWardenHostel(req.session.user.id);
@@ -69,6 +76,7 @@ router.get('/complaints', (req, res) => {
         const complaints = db.prepare(`
             SELECT 
                 c.*,
+                CASE WHEN c.status != 'Resolved' AND datetime(c.created_at, '+72 hours') <= datetime('now') THEN 1 ELSE 0 END as is_escalated,
                 s.full_name as student_name, s.enrollment_no, s.mobile,
                 r.room_no, b.bed_no
             FROM complaints c
@@ -78,6 +86,7 @@ router.get('/complaints', (req, res) => {
             LEFT JOIN rooms r ON b.room_id = r.id
             WHERE c.hostel_id = ?
             ORDER BY 
+                is_escalated DESC,
                 CASE c.priority WHEN 'High' THEN 1 WHEN 'Medium' THEN 2 ELSE 3 END,
                 c.created_at DESC
         `).all(hostel.id);
@@ -106,6 +115,8 @@ router.post('/complaints/:id/update', (req, res) => {
                 resolved_at = COALESCE(?, resolved_at)
             WHERE id = ?
         `).run(priority, status, assigned_to, remarks, resolvedAt, req.params.id);
+
+        logAudit(req.session.user.id, req.session.user.email, 'COMPLAINT_UPDATE', `Warden updated Complaint #${req.params.id}: Status=${status}, Priority=${priority}.`);
 
         res.json({ success: true, message: 'Complaint updated successfully' });
     } catch (err) {
@@ -162,13 +173,15 @@ router.post('/requests/:id/recommend', (req, res) => {
             WHERE id = ?
         `).run(recommendation, remarks || '', req.params.id);
 
+        logAudit(req.session.user.id, req.session.user.email, 'WARDEN_RECOMMENDATION', `Warden set ${recommendation} for Request #${req.params.id}.`);
+
         res.json({ success: true, message: 'Recommendation submitted for Administrator review.' });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// 4. Visitor Entry and Exit (FR-59 to FR-63)
+// 4. Visitor Entry and Exit with Masked ID & Digital Pass Code (FR-59 to FR-63, NFR-09)
 router.get('/visitors', (req, res) => {
     try {
         const hostel = getWardenHostel(req.session.user.id);
@@ -184,7 +197,14 @@ router.get('/visitors', (req, res) => {
             ORDER BY v.in_time DESC
         `).all(hostel.id);
 
-        res.json(visitors);
+        // Mask ID proof for privacy (NFR-09: show masked except last 4 characters)
+        const maskedVisitors = visitors.map(v => {
+            const idLen = v.id_proof.length;
+            const masked = idLen > 4 ? '••••-••••-' + v.id_proof.slice(-4) : v.id_proof;
+            return { ...v, id_proof_masked: masked };
+        });
+
+        res.json(maskedVisitors);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -200,7 +220,6 @@ router.post('/visitors/in', (req, res) => {
         const hostel = getWardenHostel(req.session.user.id);
         if (!hostel) return res.status(400).json({ error: 'No hostel assigned' });
 
-        // Verify student has active allocation in this hostel
         const studentAlloc = db.prepare(`
             SELECT a.id FROM allocations a
             JOIN beds b ON a.bed_id = b.id
@@ -212,7 +231,6 @@ router.post('/visitors/in', (req, res) => {
             return res.status(400).json({ error: 'Student does not have an active room allocation in this hostel.' });
         }
 
-        // Check visiting hours (09:00 to 19:00) per BR-08
         const currentHour = new Date().getHours();
         if ((currentHour < 9 || currentHour >= 19) && !override_reason) {
             return res.status(400).json({
@@ -220,12 +238,21 @@ router.post('/visitors/in', (req, res) => {
             });
         }
 
-        db.prepare(`
-            INSERT INTO visitors (hostel_id, visitor_name, relation, id_proof, student_id, purpose, recorded_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        `).run(hostel.id, visitor_name.trim(), relation.trim(), id_proof.trim(), student_id, purpose.trim(), req.session.user.id);
+        const passCode = `VPASS-${Math.floor(100000 + Math.random() * 900000)}`;
 
-        res.json({ success: true, message: 'Visitor entry recorded.' });
+        const ins = db.prepare(`
+            INSERT INTO visitors (hostel_id, visitor_name, relation, id_proof, student_id, purpose, pass_code, recorded_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(hostel.id, visitor_name.trim(), relation.trim(), id_proof.trim(), student_id, purpose.trim(), passCode, req.session.user.id);
+
+        logAudit(req.session.user.id, req.session.user.email, 'VISITOR_ENTRY', `Visitor ${visitor_name} checked in (Pass: ${passCode}) for Student #${student_id}.`);
+
+        res.json({
+            success: true,
+            visitorId: ins.lastInsertRowid,
+            passCode,
+            message: 'Visitor entry recorded successfully.'
+        });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -234,6 +261,7 @@ router.post('/visitors/in', (req, res) => {
 router.post('/visitors/:id/out', (req, res) => {
     try {
         db.prepare("UPDATE visitors SET out_time = CURRENT_TIMESTAMP WHERE id = ? AND out_time IS NULL").run(req.params.id);
+        logAudit(req.session.user.id, req.session.user.email, 'VISITOR_EXIT', `Visitor record #${req.params.id} checked out.`);
         res.json({ success: true, message: 'Visitor exit recorded.' });
     } catch (err) {
         res.status(500).json({ error: err.message });

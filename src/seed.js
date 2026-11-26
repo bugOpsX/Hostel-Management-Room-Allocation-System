@@ -6,7 +6,7 @@ async function seed() {
 
     // Clear existing tables in reverse dependency order
     const tables = [
-        'visitors', 'notices', 'complaints', 'payments', 'fees',
+        'audit_logs', 'waitlist', 'visitors', 'notices', 'complaints', 'payments', 'fees',
         'room_requests', 'allocations', 'beds', 'rooms', 'hostels',
         'students', 'users'
     ];
@@ -163,6 +163,18 @@ async function seed() {
         'WiFi router upgrades will take place this Saturday between 2 PM and 4 PM.',
         hostelBoys.lastInsertRowid, wardenBoys.lastInsertRowid
     );
+
+    // 9. Initial Audit Log & Waitlist demo
+    db.prepare(`
+        INSERT INTO audit_logs (user_id, user_email, action, details)
+        VALUES (?, 'admin@hostel.com', 'SYSTEM_INIT', 'Seeded initial institutional hostels, rooms, and demo users.')
+    `).run(admin.lastInsertRowid);
+
+    // Seed waitlist entry for student Amit Verma
+    db.prepare(`
+        INSERT INTO waitlist (student_id, preferred_hostel_id, priority_order, status)
+        VALUES (?, ?, 1, 'Waiting')
+    `).run(sAmit.studentId, hostelBoys.lastInsertRowid);
 
     console.log('✅ Seed completed successfully!');
     console.log('Credentials:');

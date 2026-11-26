@@ -7,80 +7,141 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <style>
-        body { background-color: #f8f9fa; font-family: system-ui, -apple-system, sans-serif; }
+        :root {
+            --primary-dark: #1a2a44;
+            --card-radius: 12px;
+        }
+        body { 
+            background-color: #f3f6f9; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            color: #2c3e50;
+        }
         .navbar-brand { font-weight: 700; letter-spacing: 0.5px; }
-        .kpi-card { border: none; border-radius: 12px; transition: transform 0.15s; }
-        .kpi-card:hover { transform: translateY(-2px); }
-        .nav-pills .nav-link { border-radius: 8px; font-weight: 500; color: #495057; padding: 0.6rem 1rem; }
-        .nav-pills .nav-link.active { background-color: #0d6efd; color: white; }
-        .table-responsive { background: white; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+        .kpi-card { 
+            border: none; 
+            border-radius: var(--card-radius); 
+            box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+            transition: transform 0.2s ease, box-shadow 0.2s ease; 
+        }
+        .kpi-card:hover { 
+            transform: translateY(-3px); 
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+        }
+        .nav-pills .nav-link { 
+            border-radius: 8px; 
+            font-weight: 600; 
+            color: #495057; 
+            padding: 0.65rem 1.1rem;
+            transition: all 0.15s;
+        }
+        .nav-pills .nav-link:hover { background-color: #e9ecef; }
+        .nav-pills .nav-link.active { 
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); 
+            color: white; 
+            box-shadow: 0 4px 10px rgba(30, 60, 114, 0.25);
+        }
+        .table-responsive { 
+            background: white; 
+            border-radius: 10px; 
+            box-shadow: 0 2px 12px rgba(0,0,0,0.04); 
+            border: 1px solid rgba(0,0,0,0.05);
+        }
+        .progress-thin { height: 6px; border-radius: 3px; }
     </style>
 </head>
 <body>
 
+    <!-- Toast Notification Container -->
+    <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100;">
+        <div id="adminToast" class="toast align-items-center text-white border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body" id="toastMessage">Notification</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        </div>
+    </div>
+
     <!-- Top Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark px-3 py-2 shadow-sm">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark px-3 py-2 shadow-sm sticky-top">
         <div class="container-fluid">
             <a class="navbar-brand d-flex align-items-center" href="/admin.html">
-                <i class="bi bi-building-gear me-2 text-primary"></i> HMRAS <span class="badge bg-danger ms-2">Admin</span>
+                <i class="bi bi-building-gear me-2 text-primary"></i> HMRAS <span class="badge bg-danger ms-2 px-2">Administrator</span>
             </a>
             <div class="d-flex align-items-center gap-3">
                 <span class="text-light small d-none d-md-inline" id="userEmailDisplay"><i class="bi bi-person-circle me-1"></i>admin@hostel.com</span>
-                <button class="btn btn-outline-light btn-sm" onclick="logout()"><i class="bi bi-box-arrow-right me-1"></i>Logout</button>
+                <button class="btn btn-outline-light btn-sm px-3" onclick="logout()"><i class="bi bi-box-arrow-right me-1"></i>Logout</button>
             </div>
         </div>
     </nav>
 
     <div class="container-fluid px-4 py-4">
         
+        <!-- Header Actions & Reports Bar -->
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+            <div>
+                <h4 class="fw-bold mb-0">Hostel Administration Dashboard</h4>
+                <p class="text-muted small mb-0">Real-time room occupancy, approvals, waitlist, and maintenance tracking</p>
+            </div>
+            <div class="d-flex gap-2 flex-wrap">
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                        <i class="bi bi-download me-1"></i> Export Reports (CSV)
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end shadow">
+                        <li><a class="dropdown-item" href="/api/admin/reports/export-csv?type=occupancy"><i class="bi bi-file-earmark-spreadsheet me-2 text-success"></i>Occupancy Matrix</a></li>
+                        <li><a class="dropdown-item" href="/api/admin/reports/export-csv?type=fees"><i class="bi bi-cash me-2 text-primary"></i>Fee Collections</a></li>
+                        <li><a class="dropdown-item" href="/api/admin/reports/export-csv?type=complaints"><i class="bi bi-tools me-2 text-warning"></i>Maintenance Complaints</a></li>
+                    </ul>
+                </div>
+                <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#bulkRoomModal">
+                    <i class="bi bi-file-earmark-arrow-up me-1"></i> Bulk Upload Rooms (CSV)
+                </button>
+            </div>
+        </div>
+
         <!-- KPI Cards -->
-        <div class="row g-3 mb-4" id="kpiRow">
+        <div class="row g-3 mb-4">
             <div class="col-xl-3 col-md-6">
-                <div class="card kpi-card bg-primary text-white p-3 shadow-sm">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="text-uppercase small opacity-75 fw-bold">Bed Occupancy</div>
-                            <h3 class="fw-bold mb-0" id="kpiBedsOccupied">0 / 0</h3>
-                            <small class="opacity-75" id="kpiOccupancyRate">0% Occupancy</small>
-                        </div>
-                        <i class="bi bi-pie-chart-fill fs-1 opacity-50"></i>
+                <div class="card kpi-card bg-primary text-white p-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div class="text-uppercase small fw-bold opacity-75">Occupancy Rate</div>
+                        <i class="bi bi-pie-chart-fill fs-2 opacity-50"></i>
                     </div>
+                    <h3 class="fw-bold mb-1" id="kpiBedsOccupied">0 / 0</h3>
+                    <div class="progress progress-thin bg-white bg-opacity-25 mb-2">
+                        <div id="occupancyProgressBar" class="progress-bar bg-white" style="width: 0%"></div>
+                    </div>
+                    <small class="opacity-75" id="kpiOccupancyRate">0% Occupancy</small>
                 </div>
             </div>
             <div class="col-xl-3 col-md-6">
-                <div class="card kpi-card bg-success text-white p-3 shadow-sm">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="text-uppercase small opacity-75 fw-bold">Vacant Beds Available</div>
-                            <h3 class="fw-bold mb-0" id="kpiBedsVacant">0</h3>
-                            <small class="opacity-75" id="kpiMaintenanceBeds">0 Under Maintenance</small>
-                        </div>
-                        <i class="bi bi-door-open-fill fs-1 opacity-50"></i>
+                <div class="card kpi-card bg-success text-white p-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div class="text-uppercase small fw-bold opacity-75">Vacant Beds</div>
+                        <i class="bi bi-door-open-fill fs-2 opacity-50"></i>
                     </div>
+                    <h3 class="fw-bold mb-1" id="kpiBedsVacant">0</h3>
+                    <small class="opacity-75" id="kpiMaintenanceBeds">0 Under Maintenance</small>
                 </div>
             </div>
             <div class="col-xl-3 col-md-6">
-                <div class="card kpi-card bg-warning text-dark p-3 shadow-sm">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="text-uppercase small opacity-75 fw-bold">Pending Requests</div>
-                            <h3 class="fw-bold mb-0" id="kpiPendingRequests">0</h3>
-                            <small class="opacity-75" id="kpiPendingStudents">0 New Students Pending</small>
-                        </div>
-                        <i class="bi bi-hourglass-split fs-1 opacity-50"></i>
+                <div class="card kpi-card bg-warning text-dark p-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div class="text-uppercase small fw-bold opacity-75">Pending Action</div>
+                        <i class="bi bi-hourglass-split fs-2 opacity-50"></i>
                     </div>
+                    <h3 class="fw-bold mb-1" id="kpiPendingRequests">0</h3>
+                    <small class="opacity-75" id="kpiPendingStudents">0 Students Pending Approval</small>
                 </div>
             </div>
             <div class="col-xl-3 col-md-6">
-                <div class="card kpi-card bg-danger text-white p-3 shadow-sm">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="text-uppercase small opacity-75 fw-bold">Active Complaints</div>
-                            <h3 class="fw-bold mb-0" id="kpiOpenComplaints">0</h3>
-                            <small class="opacity-75" id="kpiOverdueFees">0 Unpaid / Overdue Fees</small>
-                        </div>
-                        <i class="bi bi-tools fs-1 opacity-50"></i>
+                <div class="card kpi-card bg-danger text-white p-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div class="text-uppercase small fw-bold opacity-75">Open Complaints</div>
+                        <i class="bi bi-tools fs-2 opacity-50"></i>
                     </div>
+                    <h3 class="fw-bold mb-1" id="kpiOpenComplaints">0</h3>
+                    <small class="opacity-75" id="kpiEscalatedComplaints">0 Escalated (>72h)</small>
                 </div>
             </div>
         </div>
@@ -95,16 +156,24 @@
                     <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabHostels"><i class="bi bi-building me-1"></i> Hostels & Rooms</button>
                 </li>
                 <li class="nav-item">
-                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabAllocations"><i class="bi bi-person-check me-1"></i> Room Allocation</button>
+                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabAllocations"><i class="bi bi-person-check me-1"></i> Allocation Engine</button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabWaitlist">
+                        <i class="bi bi-list-ol me-1"></i> Waitlist Queue <span class="badge bg-danger rounded-pill ms-1" id="waitlistBadgeCount">0</span>
+                    </button>
                 </li>
                 <li class="nav-item">
                     <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabRequests"><i class="bi bi-arrow-left-right me-1"></i> Transfer & Vacating</button>
                 </li>
                 <li class="nav-item">
-                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabFees"><i class="bi bi-cash-stack me-1"></i> Hostel Fees</button>
+                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabFees"><i class="bi bi-cash-stack me-1"></i> Fee Records</button>
                 </li>
                 <li class="nav-item">
                     <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabNotices"><i class="bi bi-megaphone me-1"></i> Notices</button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabAudit"><i class="bi bi-journal-text me-1"></i> Audit Trail</button>
                 </li>
             </ul>
 
@@ -125,7 +194,7 @@
                                     <th>Gender</th>
                                     <th>Department</th>
                                     <th>Mobile</th>
-                                    <th>Allocation</th>
+                                    <th>Current Allocation</th>
                                     <th>Account Status</th>
                                     <th>Action</th>
                                 </tr>
@@ -199,7 +268,7 @@
                         
                         <!-- Manual Allocation -->
                         <div class="col-lg-6">
-                            <div class="card p-3 border h-100 bg-light">
+                            <div class="card p-4 border h-100 bg-light">
                                 <h6 class="fw-bold text-primary mb-3"><i class="bi bi-hand-index me-1"></i> Manual Bed Allocation</h6>
                                 <form id="manualAllocForm">
                                     <div class="mb-3">
@@ -209,7 +278,7 @@
                                         </select>
                                     </div>
                                     <div class="mb-3">
-                                        <label class="form-label small fw-semibold">2. Select Vacant Bed (Filtered by Gender Match)</label>
+                                        <label class="form-label small fw-semibold">2. Select Vacant Bed (Gender Matching BR-03)</label>
                                         <select id="allocBedSelect" class="form-select" required>
                                             <option value="">First select a student...</option>
                                         </select>
@@ -224,7 +293,7 @@
                                             <input type="number" id="allocFeeAmount" class="form-control" value="25000">
                                         </div>
                                     </div>
-                                    <button type="submit" class="btn btn-primary w-100 py-2">
+                                    <button type="submit" class="btn btn-primary w-100 py-2 fw-semibold">
                                         <i class="bi bi-check2-circle me-1"></i> Confirm Manual Allocation
                                     </button>
                                 </form>
@@ -233,10 +302,10 @@
 
                         <!-- Automated Allocation -->
                         <div class="col-lg-6">
-                            <div class="card p-3 border h-100 bg-light">
+                            <div class="card p-4 border h-100 bg-light">
                                 <h6 class="fw-bold text-success mb-3"><i class="bi bi-magic me-1"></i> 1-Click Automated Allocation</h6>
                                 <p class="text-muted small">
-                                    The system automatically locates the first vacant bed in a hostel matching the student's gender (BR-03), assigns the bed atomically, and generates the term fee record (BR-05).
+                                    System locates the first vacant bed in a gender-appropriate hostel (BR-03), assigns it atomically, and auto-generates term fee (BR-05). If full, automatically queues student to waitlist (FR-26).
                                 </p>
                                 <form id="autoAllocForm">
                                     <div class="mb-3">
@@ -245,7 +314,7 @@
                                             <option value="">Choose Student...</option>
                                         </select>
                                     </div>
-                                    <button type="submit" class="btn btn-success w-100 py-2">
+                                    <button type="submit" class="btn btn-success w-100 py-2 fw-semibold">
                                         <i class="bi bi-lightning-charge me-1"></i> Run Automated Allocation
                                     </button>
                                 </form>
@@ -256,7 +325,33 @@
                     </div>
                 </div>
 
-                <!-- 4. REQUESTS TAB -->
+                <!-- 4. WAITLIST TAB (PHASE 2 - FR-23, FR-26) -->
+                <div class="tab-pane fade" id="tabWaitlist">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="fw-bold mb-0"><i class="bi bi-list-ol me-2"></i>Automated Waitlist Priority Queue (FR-26)</h5>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Rank</th>
+                                    <th>Student</th>
+                                    <th>Roll No</th>
+                                    <th>Gender</th>
+                                    <th>Department</th>
+                                    <th>Queued Since</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="waitlistTableBody">
+                                <tr><td colspan="8" class="text-center py-3 text-muted">No students currently waitlisted.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 5. REQUESTS TAB -->
                 <div class="tab-pane fade" id="tabRequests">
                     <h5 class="fw-bold mb-3"><i class="bi bi-arrow-left-right me-2"></i>Transfer & Vacating Approval Queue</h5>
                     <div class="table-responsive">
@@ -267,9 +362,9 @@
                                     <th>Student</th>
                                     <th>Type</th>
                                     <th>Current Room</th>
-                                    <th>Preferred Hostel / Reason</th>
+                                    <th>Reason</th>
                                     <th>Warden Rec.</th>
-                                    <th>Fee Status</th>
+                                    <th>Fee Dues</th>
                                     <th>Status</th>
                                     <th>Admin Decision</th>
                                 </tr>
@@ -281,9 +376,9 @@
                     </div>
                 </div>
 
-                <!-- 5. FEES TAB -->
+                <!-- 6. FEES TAB -->
                 <div class="tab-pane fade" id="tabFees">
-                    <h5 class="fw-bold mb-3"><i class="bi bi-cash-stack me-2"></i>Hostel Fee Records & Offline Payment</h5>
+                    <h5 class="fw-bold mb-3"><i class="bi bi-cash-stack me-2"></i>Hostel Fee Invoices & Payment Records</h5>
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0">
                             <thead class="table-light">
@@ -306,10 +401,10 @@
                     </div>
                 </div>
 
-                <!-- 6. NOTICES TAB -->
+                <!-- 7. NOTICES TAB -->
                 <div class="tab-pane fade" id="tabNotices">
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5 class="fw-bold mb-0"><i class="bi bi-megaphone me-2"></i>Hostel Announcements</h5>
+                        <h5 class="fw-bold mb-0"><i class="bi bi-megaphone me-2"></i>Campus Announcements</h5>
                         <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addNoticeModal">
                             <i class="bi bi-plus-circle me-1"></i> Post Notice
                         </button>
@@ -319,11 +414,61 @@
                     </div>
                 </div>
 
+                <!-- 8. AUDIT LOG TAB (PHASE 2 - FR-82, NFR-10) -->
+                <div class="tab-pane fade" id="tabAudit">
+                    <h5 class="fw-bold mb-3"><i class="bi bi-journal-text me-2"></i>Immutable System Audit Trail (NFR-10)</h5>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>User</th>
+                                    <th>Action</th>
+                                    <th>Transaction Details</th>
+                                </tr>
+                            </thead>
+                            <tbody id="auditTableBody">
+                                <tr><td colspan="4" class="text-center py-3 text-muted">Loading audit logs...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
             </div>
         </div>
     </div>
 
     <!-- Modals -->
+    <!-- Bulk Upload Rooms CSV Modal (FR-20) -->
+    <div class="modal fade" id="bulkRoomModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-file-earmark-arrow-up me-2"></i>Bulk Upload Rooms from CSV (FR-20)</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="bulkRoomForm">
+                    <div class="modal-body">
+                        <p class="small text-muted mb-2">
+                            Paste CSV rows formatted as: <code>HostelName,RoomNo,Floor,RoomType,Capacity</code>
+                        </p>
+                        <div class="mb-2">
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="fillSampleCSV()">
+                                Insert Sample Template
+                            </button>
+                        </div>
+                        <textarea id="csvDataInput" class="form-control font-monospace small" rows="8" placeholder="HostelName,RoomNo,Floor,RoomType,Capacity&#10;Tagore Boys Hostel,105,1,Double,2&#10;Tagore Boys Hostel,106,1,Triple,3" required></textarea>
+                        <div id="bulkResultAlert" class="mt-3 d-none"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        <button type="submit" class="btn btn-primary">Process Import</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- Add Hostel Modal -->
     <div class="modal fade" id="addHostelModal" tabindex="-1">
         <div class="modal-dialog">
@@ -370,7 +515,7 @@
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title fw-bold">Add Room (Auto Generates Beds)</h5>
+                    <h5 class="modal-title fw-bold">Add Room (Auto-Generates Beds)</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <form id="addRoomForm">
@@ -490,8 +635,15 @@
         let eligibleStudentsCache = [];
         let hostelsCache = [];
 
+        function showToast(message, type = 'success') {
+            const toastEl = document.getElementById('adminToast');
+            document.getElementById('toastMessage').textContent = message;
+            toastEl.className = `toast align-items-center text-white border-0 bg-${type === 'error' ? 'danger' : 'success'}`;
+            const toast = new bootstrap.Toast(toastEl, { delay: 3500 });
+            toast.show();
+        }
+
         async function init() {
-            // Check auth
             try {
                 const res = await fetch('/api/auth/me');
                 const data = await res.json();
@@ -509,9 +661,11 @@
             await loadStudentsTable();
             await loadHostelsAndRooms();
             await loadEligibleStudents();
+            await loadWaitlistTable();
             await loadRequestsTable();
             await loadFeesTable();
             await loadNotices();
+            await loadAuditLogs();
         }
 
         async function logout() {
@@ -519,30 +673,30 @@
             window.location.href = '/index.html';
         }
 
-        // 1. Dashboard KPIs
         async function loadDashboardKPIs() {
             const res = await fetch('/api/admin/dashboard');
             const data = await res.json();
             document.getElementById('kpiBedsOccupied').textContent = `${data.beds.occupied} / ${data.beds.total}`;
             document.getElementById('kpiOccupancyRate').textContent = `${data.beds.occupancyRate}% Occupancy Rate`;
+            document.getElementById('occupancyProgressBar').style.width = `${data.beds.occupancyRate}%`;
             document.getElementById('kpiBedsVacant').textContent = data.beds.vacant;
             document.getElementById('kpiMaintenanceBeds').textContent = `${data.beds.maintenance} Under Maintenance`;
             document.getElementById('kpiPendingRequests').textContent = data.pendingRequests;
             document.getElementById('kpiPendingStudents').textContent = `${data.students.pending} Students Pending Approval`;
-            document.getElementById('kpiOpenComplaints').textContent = data.openComplaints;
-            document.getElementById('kpiOverdueFees').textContent = `${data.overdueFees} Unpaid / Overdue Fees`;
+            document.getElementById('kpiOpenComplaints').textContent = data.complaints.open;
+            document.getElementById('kpiEscalatedComplaints').textContent = `${data.complaints.escalated} Escalated (>72h)`;
+            document.getElementById('waitlistBadgeCount').textContent = data.waitlistCount || 0;
         }
 
-        // 2. Students Directory
         async function loadStudentsTable() {
             const res = await fetch('/api/admin/students');
             const students = await res.json();
             const tbody = document.getElementById('studentsTableBody');
             tbody.innerHTML = students.map(s => `
                 <tr>
-                    <td><span class="badge bg-light text-dark border">${s.enrollment_no}</span></td>
+                    <td><span class="badge bg-light text-dark border font-monospace">${s.enrollment_no}</span></td>
                     <td class="fw-semibold">${s.full_name}</td>
-                    <td>${s.gender}</td>
+                    <td><span class="badge ${s.gender === 'Female' ? 'bg-danger-subtle text-danger' : 'bg-primary-subtle text-primary'}">${s.gender}</span></td>
                     <td>${s.department} (Yr ${s.year_of_study})</td>
                     <td>${s.mobile}</td>
                     <td>
@@ -565,12 +719,13 @@
         }
 
         async function approveStudent(studentId) {
-            if (!confirm('Approve this student account for login and room allocation?')) return;
             const res = await fetch(`/api/admin/students/${studentId}/approve`, { method: 'POST' });
             if (res.ok) {
+                showToast('Student account approved successfully!');
                 loadStudentsTable();
                 loadDashboardKPIs();
                 loadEligibleStudents();
+                loadAuditLogs();
             }
         }
 
@@ -582,16 +737,14 @@
             });
         }
 
-        // 3. Hostels & Rooms Matrix
         async function loadHostelsAndRooms() {
             const res = await fetch('/api/admin/hostels');
             hostelsCache = await res.json();
             
-            // Populate Hostels Summary Row
             const sumRow = document.getElementById('hostelsSummaryRow');
             sumRow.innerHTML = hostelsCache.map(h => `
                 <div class="col-md-6">
-                    <div class="card p-3 border shadow-sm">
+                    <div class="card p-3 border shadow-sm h-100">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <h6 class="fw-bold mb-0 text-dark">${h.name}</h6>
                             <span class="badge ${h.type === 'Boys' ? 'bg-info text-dark' : 'bg-danger'}">${h.type} Hostel</span>
@@ -606,7 +759,6 @@
                 </div>
             `).join('');
 
-            // Populate selects
             const hSelect = document.getElementById('filterHostelSelect');
             const roomHSelect = document.getElementById('roomHostelSelect');
             const noticeHSelect = document.getElementById('noticeHostelSelect');
@@ -616,7 +768,6 @@
             roomHSelect.innerHTML = hostelsCache.map(h => `<option value="${h.id}">${h.name}</option>`).join('');
             noticeHSelect.innerHTML = '<option value="">All Hostels</option>' + hostelsCache.map(h => `<option value="${h.id}">${h.name}</option>`).join('');
 
-            // Load Wardens for Add Hostel modal
             const wRes = await fetch('/api/admin/wardens');
             const wardens = await wRes.json();
             document.getElementById('hWardenSelect').innerHTML = '<option value="">Select Warden...</option>' + wardens.map(w => `<option value="${w.id}">${w.email}</option>`).join('');
@@ -644,7 +795,7 @@
                     <td>Floor ${b.floor}</td>
                     <td class="fw-semibold">${b.room_no}</td>
                     <td>${b.room_type}</td>
-                    <td><span class="badge bg-light text-dark border">${b.bed_no}</span></td>
+                    <td><span class="badge bg-light text-dark border font-monospace">${b.bed_no}</span></td>
                     <td>
                         <span class="badge ${b.bed_status === 'Vacant' ? 'bg-success' : (b.bed_status === 'Occupied' ? 'bg-danger' : 'bg-warning text-dark')}">
                             ${b.bed_status}
@@ -654,7 +805,7 @@
                     <td>
                         ${b.bed_status !== 'Occupied' ? `
                             <button class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="toggleBedStatus(${b.bed_id}, '${b.bed_status === 'Vacant' ? 'Maintenance' : 'Vacant'}')">
-                                Toggle ${b.bed_status === 'Vacant' ? 'Maintenance' : 'Vacant'}
+                                Set ${b.bed_status === 'Vacant' ? 'Maintenance' : 'Vacant'}
                             </button>
                         ` : ''}
                     </td>
@@ -669,8 +820,10 @@
                 body: JSON.stringify({ status: newStatus })
             });
             if (res.ok) {
+                showToast(`Bed status changed to ${newStatus}`);
                 loadRoomsTable();
                 loadDashboardKPIs();
+                loadAuditLogs();
             }
         }
 
@@ -679,6 +832,37 @@
             const capMap = { 'Single': 1, 'Double': 2, 'Triple': 3, 'Quad': 4 };
             document.getElementById('rCapacity').value = capMap[type] || 2;
         }
+
+        function fillSampleCSV() {
+            document.getElementById('csvDataInput').value = 
+`HostelName,RoomNo,Floor,RoomType,Capacity
+Tagore Boys Hostel,105,1,Double,2
+Tagore Boys Hostel,106,1,Triple,3
+Sarojini Girls Hostel,203,2,Single,1`;
+        }
+
+        document.getElementById('bulkRoomForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const csv_data = document.getElementById('csvDataInput').value;
+            const res = await fetch('/api/admin/rooms/bulk-csv', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ csv_data })
+            });
+            const data = await res.json();
+            const alertBox = document.getElementById('bulkResultAlert');
+            alertBox.className = 'mt-3 alert alert-info';
+            alertBox.innerHTML = `<strong>Import Summary:</strong> Accepted: ${data.acceptedCount} rooms | Rejected: ${data.rejectedCount}`;
+            if (data.rejectedRows && data.rejectedRows.length > 0) {
+                alertBox.innerHTML += '<ul class="mb-0 mt-2">' + data.rejectedRows.map(r => `<li>Row ${r.row}: ${r.reason}</li>`).join('') + '</ul>';
+            }
+            if (data.acceptedCount > 0) {
+                showToast(`Successfully created ${data.acceptedCount} rooms from CSV.`);
+                loadHostelsAndRooms();
+                loadDashboardKPIs();
+                loadAuditLogs();
+            }
+        });
 
         document.getElementById('addHostelForm').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -695,8 +879,10 @@
             });
             if (res.ok) {
                 bootstrap.Modal.getInstance(document.getElementById('addHostelModal')).hide();
+                showToast('Hostel created successfully!');
                 loadHostelsAndRooms();
                 loadDashboardKPIs();
+                loadAuditLogs();
             }
         });
 
@@ -717,15 +903,15 @@
             const data = await res.json();
             if (res.ok) {
                 bootstrap.Modal.getInstance(document.getElementById('addRoomModal')).hide();
-                alert(data.message);
+                showToast(data.message);
                 loadHostelsAndRooms();
                 loadDashboardKPIs();
+                loadAuditLogs();
             } else {
-                alert(data.error);
+                showToast(data.error, 'error');
             }
         });
 
-        // 4. Allocation Engine
         async function loadEligibleStudents() {
             const res = await fetch('/api/admin/allocations/eligible-students');
             eligibleStudentsCache = await res.json();
@@ -749,7 +935,7 @@
             const res = await fetch(`/api/admin/allocations/available-beds?gender=${student.gender}`);
             const beds = await res.json();
             if (beds.length === 0) {
-                bedSelect.innerHTML = `<option value="">No vacant beds found in ${student.gender === 'Female' ? 'Girls' : 'Boys'} hostels</option>`;
+                bedSelect.innerHTML = `<option value="">No vacant beds in ${student.gender === 'Female' ? 'Girls' : 'Boys'} hostels</option>`;
                 return;
             }
             bedSelect.innerHTML = '<option value="">Select Bed...</option>' + beds.map(b => `
@@ -772,14 +958,16 @@
             });
             const data = await res.json();
             if (res.ok) {
-                alert(data.message);
+                showToast(data.message);
                 loadDashboardKPIs();
                 loadEligibleStudents();
                 loadStudentsTable();
                 loadRoomsTable();
+                loadWaitlistTable();
                 loadFeesTable();
+                loadAuditLogs();
             } else {
-                alert('Allocation Error: ' + data.error);
+                showToast('Allocation Error: ' + data.error, 'error');
             }
         });
 
@@ -794,18 +982,64 @@
             });
             const data = await res.json();
             if (res.ok) {
-                resBox.innerHTML = `<div class="alert alert-success">${data.message}</div>`;
+                resBox.innerHTML = `<div class="alert ${data.waitlisted ? 'alert-warning' : 'alert-success'}">${data.message}</div>`;
+                showToast(data.message, data.waitlisted ? 'error' : 'success');
                 loadDashboardKPIs();
                 loadEligibleStudents();
                 loadStudentsTable();
                 loadRoomsTable();
+                loadWaitlistTable();
                 loadFeesTable();
+                loadAuditLogs();
             } else {
                 resBox.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+                showToast(data.error, 'error');
             }
         });
 
-        // 5. Transfer & Vacating Requests
+        // 4. Waitlist Table
+        async function loadWaitlistTable() {
+            const res = await fetch('/api/admin/waitlist');
+            const list = await res.json();
+            const tbody = document.getElementById('waitlistTableBody');
+            if (list.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center py-3 text-muted">No students currently waitlisted.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = list.map(w => `
+                <tr>
+                    <td><span class="badge bg-dark rounded-pill px-2">#${w.priority_order}</span></td>
+                    <td class="fw-semibold">${w.student_name}</td>
+                    <td><span class="badge bg-light text-dark border font-monospace">${w.enrollment_no}</span></td>
+                    <td>${w.gender}</td>
+                    <td>${w.department} (Yr ${w.year_of_study})</td>
+                    <td class="small">${new Date(w.created_at).toLocaleDateString()}</td>
+                    <td><span class="badge bg-warning text-dark">${w.status}</span></td>
+                    <td>
+                        <button class="btn btn-sm btn-success py-0 px-2" onclick="allocateWaitlistEntry(${w.id})">
+                            <i class="bi bi-door-open me-1"></i> Allocate Bed
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function allocateWaitlistEntry(id) {
+            const res = await fetch(`/api/admin/waitlist/${id}/allocate`, { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                showToast(data.message);
+                loadWaitlistTable();
+                loadDashboardKPIs();
+                loadStudentsTable();
+                loadRoomsTable();
+                loadAuditLogs();
+            } else {
+                showToast(data.error, 'error');
+            }
+        }
+
+        // 5. Requests Table
         async function loadRequestsTable() {
             const res = await fetch('/api/admin/requests');
             const requests = await res.json();
@@ -817,18 +1051,14 @@
             tbody.innerHTML = requests.map(r => `
                 <tr>
                     <td class="small">${new Date(r.created_at).toLocaleDateString()}</td>
-                    <td class="fw-semibold">${r.student_name} (${r.gender})</td>
+                    <td class="fw-semibold">${r.student_name}</td>
                     <td><span class="badge ${r.request_type === 'Transfer' ? 'bg-primary' : 'bg-warning text-dark'}">${r.request_type}</span></td>
-                    <td>${r.current_hostel} - Room ${r.current_room}</td>
-                    <td class="small">
-                        ${r.preferred_hostel_name ? `<strong>Pref:</strong> ${r.preferred_hostel_name}<br>` : ''}
-                        <em>"${r.reason}"</em>
-                    </td>
+                    <td>${r.current_hostel} - ${r.current_room}</td>
+                    <td class="small"><em>"${r.reason}"</em></td>
                     <td>
                         <span class="badge ${r.warden_recommendation === 'Recommend' ? 'bg-success' : (r.warden_recommendation === 'Not Recommend' ? 'bg-danger' : 'bg-secondary')}">
                             ${r.warden_recommendation || 'Pending'}
                         </span>
-                        ${r.warden_remarks ? `<div class="small text-muted">${r.warden_remarks}</div>` : ''}
                     </td>
                     <td>
                         <span class="badge ${r.fee_status === 'Paid' ? 'bg-success' : 'bg-danger'}">
@@ -855,16 +1085,17 @@
             });
             const data = await res.json();
             if (res.ok) {
-                alert(data.message);
+                showToast(data.message);
                 loadRequestsTable();
                 loadRoomsTable();
                 loadDashboardKPIs();
+                loadAuditLogs();
             } else {
-                alert('Action failed: ' + data.error);
+                showToast('Action failed: ' + data.error, 'error');
             }
         }
 
-        // 6. Fees
+        // 6. Fees Table
         async function loadFeesTable() {
             const res = await fetch('/api/admin/fees');
             const fees = await res.json();
@@ -882,7 +1113,7 @@
                             ${f.status}
                         </span>
                     </td>
-                    <td class="small">${f.transaction_ref || '—'}</td>
+                    <td class="small font-monospace">${f.transaction_ref || '—'}</td>
                     <td>
                         ${f.status !== 'Paid' ? `
                             <button class="btn btn-sm btn-outline-success py-0 px-2" onclick="openOfflinePayModal(${f.id}, ${f.amount})">
@@ -915,8 +1146,10 @@
             });
             if (res.ok) {
                 bootstrap.Modal.getInstance(document.getElementById('offlinePayModal')).hide();
+                showToast('Payment recorded successfully.');
                 loadFeesTable();
                 loadDashboardKPIs();
+                loadAuditLogs();
             }
         });
 
@@ -931,13 +1164,13 @@
             }
             cont.innerHTML = notices.map(n => `
                 <div class="col-md-6">
-                    <div class="card p-3 border shadow-sm">
+                    <div class="card p-3 border shadow-sm h-100">
                         <div class="d-flex justify-content-between align-items-center mb-1">
                             <h6 class="fw-bold mb-0">${n.title}</h6>
                             <span class="badge bg-secondary">${n.hostel_name || 'All Hostels'}</span>
                         </div>
                         <p class="small text-muted mb-2">${n.body}</p>
-                        <div class="d-flex justify-content-between align-items-center small text-muted">
+                        <div class="d-flex justify-content-between align-items-center small text-muted mt-auto pt-2 border-top">
                             <span>${new Date(n.created_at).toLocaleDateString()}</span>
                             <button class="btn btn-sm btn-outline-danger py-0 px-2" onclick="deleteNotice(${n.id})">Delete</button>
                         </div>
@@ -949,7 +1182,11 @@
         async function deleteNotice(id) {
             if (!confirm('Delete this announcement?')) return;
             const res = await fetch(`/api/notices/${id}`, { method: 'DELETE' });
-            if (res.ok) loadNotices();
+            if (res.ok) {
+                showToast('Notice deleted.');
+                loadNotices();
+                loadAuditLogs();
+            }
         }
 
         document.getElementById('addNoticeForm').addEventListener('submit', async (e) => {
@@ -966,10 +1203,27 @@
             });
             if (res.ok) {
                 bootstrap.Modal.getInstance(document.getElementById('addNoticeModal')).hide();
+                showToast('Notice published successfully!');
                 document.getElementById('addNoticeForm').reset();
                 loadNotices();
+                loadAuditLogs();
             }
         });
+
+        // 8. Audit Logs Feed
+        async function loadAuditLogs() {
+            const res = await fetch('/api/admin/audit-logs');
+            const logs = await res.json();
+            const tbody = document.getElementById('auditTableBody');
+            tbody.innerHTML = logs.map(l => `
+                <tr>
+                    <td class="small text-muted font-monospace">${new Date(l.created_at).toLocaleString()}</td>
+                    <td><span class="badge bg-light text-dark border">${l.user_email || 'System'}</span></td>
+                    <td><span class="badge bg-primary-subtle text-primary">${l.action}</span></td>
+                    <td class="small">${l.details}</td>
+                </tr>
+            `).join('');
+        }
 
         init();
     </script>
