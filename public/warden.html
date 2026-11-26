@@ -613,6 +613,7 @@
             await loadWardenRequests();
             await loadVisitors();
             await loadStudentsForVisitor();
+            await loadWardenPenaltiesTable();
             await loadWardenActivityLogs();
         }
 
@@ -642,6 +643,7 @@
             document.getElementById('badgeWardenRequests').textContent = data.badges.pendingRequests || 0;
             document.getElementById('badgeWardenVisitors').textContent = data.badges.activeVisitors || 0;
             document.getElementById('badgeWardenNotices').textContent = data.badges.noticesCount || 0;
+            document.getElementById('badgeWardenPenalties').textContent = data.badges.unpaidPenalties || 0;
 
             // Populate Alerts list
             document.getElementById('wardenAlertsListGroup').innerHTML = `
@@ -952,6 +954,164 @@
                 </tr>
             `).join('');
         }
+
+        // Resident Penalties & Disciplinary Fines
+        async function loadWardenPenaltiesTable() {
+            try {
+                const res = await fetch('/api/warden/penalties');
+                const penalties = await res.json();
+                const tbody = document.getElementById('wardenPenaltiesTableBody');
+                if (penalties.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted">No resident penalties or fines on record.</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = penalties.map(p => `
+                    <tr>
+                        <td>#${p.id}</td>
+                        <td><strong>${p.student_name}</strong> <span class="small text-muted font-monospace">(${p.enrollment_no})</span></td>
+                        <td>Room ${p.room_no || '—'} (${p.bed_no || '—'})</td>
+                        <td><span class="badge bg-danger-subtle text-danger border border-danger-subtle">${p.category}</span></td>
+                        <td>
+                            <div class="fw-semibold">${p.title}</div>
+                            ${p.description ? `<small class="text-muted">${p.description}</small>` : ''}
+                        </td>
+                        <td class="fw-bold text-danger">₹${p.amount}</td>
+                        <td class="small">${p.due_date}</td>
+                        <td>
+                            <span class="badge ${p.status === 'Paid' ? 'bg-success' : (p.status === 'Waived' ? 'bg-warning text-dark' : 'bg-danger')}">
+                                ${p.status}
+                            </span>
+                        </td>
+                        <td>
+                            ${p.status === 'Unpaid' ? `
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-success py-0 px-2" onclick="openWardenRecordPenaltyPayModal(${p.id}, '${p.title.replace(/'/g, "\\'")}', ${p.amount})">
+                                        Pay
+                                    </button>
+                                    <button class="btn btn-outline-warning text-dark py-0 px-2" onclick="openWardenWaivePenaltyModal(${p.id}, '${p.title.replace(/'/g, "\\'")}', ${p.amount})">
+                                        Waive
+                                    </button>
+                                </div>
+                            ` : (p.status === 'Paid' ? `<span class="small text-success font-monospace">${p.transaction_ref || 'Paid'}</span>` : `<span class="small text-muted">Waived</span>`)}
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                console.error('Failed to load warden penalties:', err);
+            }
+        }
+
+        async function openWardenLevyPenaltyModal() {
+            const res = await fetch('/api/warden/residents');
+            if (res.ok) {
+                const residents = await res.json();
+                const sel = document.getElementById('wPenStudentSelect');
+                if (residents.length === 0) {
+                    sel.innerHTML = '<option value="">No residents currently allocated to this hostel</option>';
+                } else {
+                    sel.innerHTML = '<option value="">Select Resident...</option>' + residents.map(r => `
+                        <option value="${r.student_id}">${r.full_name} (${r.enrollment_no}) — Room ${r.room_no} (${r.bed_no})</option>
+                    `).join('');
+                }
+            }
+            const d = new Date();
+            d.setDate(d.getDate() + 7);
+            document.getElementById('wPenDueDate').value = d.toISOString().split('T')[0];
+            document.getElementById('wPenAmount').value = '';
+            document.getElementById('wPenTitle').value = '';
+            document.getElementById('wPenDesc').value = '';
+            new bootstrap.Modal(document.getElementById('wardenLevyPenaltyModal')).show();
+        }
+
+        document.getElementById('wardenLevyPenaltyForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = {
+                student_id: document.getElementById('wPenStudentSelect').value,
+                category: document.getElementById('wPenCategory').value,
+                title: document.getElementById('wPenTitle').value,
+                description: document.getElementById('wPenDesc').value,
+                amount: document.getElementById('wPenAmount').value,
+                due_date: document.getElementById('wPenDueDate').value
+            };
+            const res = await fetch('/api/warden/penalties', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (res.ok) {
+                bootstrap.Modal.getInstance(document.getElementById('wardenLevyPenaltyModal')).hide();
+                showToast(data.message);
+                loadWardenPenaltiesTable();
+                loadDashboard();
+                loadWardenActivityLogs();
+            } else {
+                showToast(data.error || 'Failed to issue penalty', 'error');
+            }
+        });
+
+        function openWardenRecordPenaltyPayModal(id, title, amount) {
+            document.getElementById('wModalPenaltyId').value = id;
+            document.getElementById('wModalPenaltyTitle').textContent = `Record payment for fine #${id}: "${title}"`;
+            document.getElementById('wModalPenAmount').value = amount;
+            document.getElementById('wModalPenRef').value = `WPEN-REC-${Date.now().toString().slice(-6)}`;
+            new bootstrap.Modal(document.getElementById('wardenRecordPenaltyPayModal')).show();
+        }
+
+        document.getElementById('wardenRecordPenaltyPayForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('wModalPenaltyId').value;
+            const payload = {
+                amount: document.getElementById('wModalPenAmount').value,
+                mode: document.getElementById('wModalPenMode').value,
+                transaction_ref: document.getElementById('wModalPenRef').value
+            };
+            const res = await fetch(`/api/warden/penalties/${id}/record-payment`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (res.ok) {
+                bootstrap.Modal.getInstance(document.getElementById('wardenRecordPenaltyPayModal')).hide();
+                showToast(data.message);
+                loadWardenPenaltiesTable();
+                loadDashboard();
+                loadWardenActivityLogs();
+            } else {
+                showToast(data.error || 'Failed to record payment', 'error');
+            }
+        });
+
+        function openWardenWaivePenaltyModal(id, title, amount) {
+            document.getElementById('wModalWaiveId').value = id;
+            document.getElementById('wModalWaiveTitle').textContent = `Waiving resident fine #${id}: "${title}" (₹${amount})`;
+            document.getElementById('wModalWaiveReason').value = '';
+            new bootstrap.Modal(document.getElementById('wardenWaivePenaltyModal')).show();
+        }
+
+        document.getElementById('wardenWaivePenaltyForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('wModalWaiveId').value;
+            const payload = {
+                reason: document.getElementById('wModalWaiveReason').value
+            };
+            const res = await fetch(`/api/warden/penalties/${id}/waive`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (res.ok) {
+                bootstrap.Modal.getInstance(document.getElementById('wardenWaivePenaltyModal')).hide();
+                showToast(data.message);
+                loadWardenPenaltiesTable();
+                loadDashboard();
+                loadWardenActivityLogs();
+            } else {
+                showToast(data.error || 'Failed to waive penalty', 'error');
+            }
+        });
 
         init();
     </script>
