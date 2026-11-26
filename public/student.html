@@ -794,8 +794,18 @@
 
         function openPaymentModal(feeId, term, amount) {
             activeFeeToPay = feeId;
+            activePenaltyToPay = null;
             document.getElementById('modalFeeId').textContent = '#' + feeId;
             document.getElementById('modalFeeTerm').textContent = term;
+            document.getElementById('modalFeeAmount').textContent = '₹' + amount;
+            new bootstrap.Modal(document.getElementById('paymentModal')).show();
+        }
+
+        function openPenaltyPaymentModal(penaltyId, title, amount) {
+            activeFeeToPay = null;
+            activePenaltyToPay = penaltyId;
+            document.getElementById('modalFeeId').textContent = 'Fine #' + penaltyId;
+            document.getElementById('modalFeeTerm').textContent = title;
             document.getElementById('modalFeeAmount').textContent = '₹' + amount;
             new bootstrap.Modal(document.getElementById('paymentModal')).show();
         }
@@ -806,7 +816,10 @@
             btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Processing...';
 
             try {
-                const res = await fetch(`/api/student/fees/${activeFeeToPay}/pay`, { method: 'POST' });
+                const endpoint = activePenaltyToPay 
+                    ? `/api/student/penalties/${activePenaltyToPay}/pay`
+                    : `/api/student/fees/${activeFeeToPay}/pay`;
+                const res = await fetch(endpoint, { method: 'POST' });
                 const data = await res.json();
                 if (res.ok) {
                     bootstrap.Modal.getInstance(document.getElementById('paymentModal')).hide();

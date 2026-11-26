@@ -6,7 +6,7 @@ async function seed() {
 
     // Clear existing tables in reverse dependency order
     const tables = [
-        'audit_logs', 'waitlist', 'visitors', 'notices', 'complaints', 'payments', 'fees',
+        'audit_logs', 'password_resets', 'penalties', 'waitlist', 'visitors', 'notices', 'complaints', 'payments', 'fees',
         'room_requests', 'allocations', 'beds', 'rooms', 'hostels',
         'students', 'users'
     ];
@@ -175,6 +175,12 @@ async function seed() {
         INSERT INTO waitlist (student_id, preferred_hostel_id, priority_order, status)
         VALUES (?, ?, 1, 'Waiting')
     `).run(sAmit.studentId, hostelBoys.lastInsertRowid);
+
+    // 10. Sample Penalties & Fines
+    db.prepare(`
+        INSERT INTO penalties (student_id, allocation_id, hostel_id, category, title, description, amount, due_date, status, imposed_by)
+        VALUES (?, ?, ?, 'Lost Key / Asset Damage', 'Room Key Replacement Fee', 'Duplicate key issuance for Room 101 wardrobe lock', 250, DATE('now', '+5 days'), 'Unpaid', ?)
+    `).run(sRahul.studentId, allocRahul.lastInsertRowid, hostelBoys.lastInsertRowid, wardenBoys.lastInsertRowid);
 
     console.log('✅ Seed completed successfully!');
     console.log('Credentials:');

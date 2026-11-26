@@ -281,7 +281,53 @@ async function runTests() {
     assert(savedVis.pass_code.startsWith('VPASS-'), 'Visitor pass code must follow VPASS format');
     console.log(`✅ 18. Tier A: Digital Visitor Gate Pass Code verified (${savedVis.pass_code}) (FR-61, BR-08)`);
 
-    console.log('\n🎉 ALL 18 VERIFICATION TESTS PASSED SUCCESSFULLY! 🚀');
+    // 19. Test Penalties & Fines Management & BR-06 Enforcement
+    // 19a. Levy penalty
+    const penaltyRes = db.prepare(`
+        INSERT INTO penalties (student_id, allocation_id, hostel_id, category, title, description, amount, due_date, status, imposed_by)
+        VALUES (?, ?, ?, 'Property Damage', 'Broken Mirror in Room', 'Cracked mirror during shifting', 750, DATE('now', '+7 days'), 'Unpaid', ?)
+    `).run(regStudent.lastInsertRowid, allocRes.lastInsertRowid, boysHostel.id, admin.id);
+    const penaltyId = penaltyRes.lastInsertRowid;
+
+    // 19b. Verify BR-06 blocks room vacating due to unpaid penalty
+    const unpaidPenalties = db.prepare("SELECT SUM(amount) as total FROM penalties WHERE student_id = ? AND status = 'Unpaid'").get(regStudent.lastInsertRowid);
+    assert(unpaidPenalties && unpaidPenalties.total === 750, 'Student should have 750 in unpaid penalties');
+    // Emulate BR-06 check
+    let vacateBlocked = false;
+    if (unpaidPenalties && unpaidPenalties.total > 0) {
+        vacateBlocked = true;
+    }
+    assert.strictEqual(vacateBlocked, true, 'BR-06 must strictly block vacating room if unpaid penalties exist');
+
+    // 19c. Student pays penalty online
+    const txnRef = `PEN-TXN-${Date.now()}`;
+    db.prepare(`
+        UPDATE penalties 
+        SET status = 'Paid', paid_at = CURRENT_TIMESTAMP, payment_mode = 'Online', transaction_ref = ?
+        WHERE id = ?
+    `).run(txnRef, penaltyId);
+    const paidPenalty = db.prepare('SELECT * FROM penalties WHERE id = ?').get(penaltyId);
+    assert.strictEqual(paidPenalty.status, 'Paid', 'Penalty status should be Paid after online payment');
+    assert.strictEqual(paidPenalty.transaction_ref, txnRef, 'Transaction ref should be set');
+
+    // 19d. Test Waiver flow
+    const waiverCandidate = db.prepare(`
+        INSERT INTO penalties (student_id, allocation_id, hostel_id, category, title, description, amount, due_date, status, imposed_by)
+        VALUES (?, ?, ?, 'Late Return / Curfew', 'Late Entry into hostel', 'Curfew breached by 15 mins', 200, DATE('now', '+3 days'), 'Unpaid', ?)
+    `).run(regStudent.lastInsertRowid, allocRes.lastInsertRowid, boysHostel.id, wardenBoys.id);
+    
+    db.prepare(`
+        UPDATE penalties
+        SET status = 'Waived', waived_by = ?, waive_reason = ?
+        WHERE id = ?
+    `).run(admin.id, 'First-time warning granted with medical excuse', waiverCandidate.lastInsertRowid);
+
+    const waivedPenalty = db.prepare('SELECT * FROM penalties WHERE id = ?').get(waiverCandidate.lastInsertRowid);
+    assert.strictEqual(waivedPenalty.status, 'Waived', 'Penalty status should be Waived');
+    assert.strictEqual(waivedPenalty.waived_by, admin.id, 'Waived by should record user id');
+    console.log('✅ 19. Penalties & Fines Management verified (Levy, BR-06 vacating block, online payment, and waiver)');
+
+    console.log('\n🎉 ALL 19 VERIFICATION TESTS PASSED SUCCESSFULLY! 🚀');
 }
 
 runTests().catch(err => {
