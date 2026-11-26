@@ -222,9 +222,27 @@
                 
                 <!-- 1. STUDENTS TAB -->
                 <div class="tab-pane fade show active" id="tabStudents">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5 class="fw-bold mb-0"><i class="bi bi-people me-2"></i>Student Directory & Verification</h5>
-                        <input type="text" id="studentSearchInput" class="form-control form-control-sm w-auto" placeholder="Search name or roll..." onkeyup="filterStudentsTable()">
+                    <div class="row align-items-center mb-3 g-2">
+                        <div class="col-md-4">
+                            <h5 class="fw-bold mb-0"><i class="bi bi-people me-2"></i>Student Directory & Verification</h5>
+                            <small class="text-muted" id="studentsCountDisplay">Showing all students</small>
+                        </div>
+                        <div class="col-md-8">
+                            <div class="d-flex gap-2 flex-wrap justify-content-md-end">
+                                <div class="input-group input-group-sm" style="max-width: 320px;">
+                                    <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
+                                    <input type="text" id="studentSearchInput" class="form-control" placeholder="Search Enrollment No, Name, Dept..." onkeyup="filterStudentsTable()">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="clearStudentSearch()" title="Clear search"><i class="bi bi-x-lg"></i></button>
+                                </div>
+                                <select id="studentStatusFilterSelect" class="form-select form-select-sm w-auto" onchange="filterStudentsTable()">
+                                    <option value="ALL">All Statuses</option>
+                                    <option value="pending">Pending Approval</option>
+                                    <option value="active">Approved / Active</option>
+                                    <option value="allocated">Allocated to Room</option>
+                                    <option value="unallocated">Not Allocated</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0" id="studentsTable">
@@ -537,9 +555,38 @@
 
                 <!-- 8. AUDIT LOG TAB (FR-82, NFR-10) -->
                 <div class="tab-pane fade" id="tabAudit">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5 class="fw-bold mb-0"><i class="bi bi-journal-text me-2"></i>System-Wide Activity & Audit Trail (NFR-10)</h5>
-                        <input type="text" id="auditFilterInput" class="form-control form-control-sm w-auto" placeholder="Filter activity..." onkeyup="filterAuditLogs()">
+                    <div class="row align-items-center mb-3 g-2">
+                        <div class="col-md-4">
+                            <h5 class="fw-bold mb-0"><i class="bi bi-journal-text me-2"></i>System Activity & Audit Trail</h5>
+                            <small class="text-muted" id="auditCountDisplay">Showing recent audit logs</small>
+                        </div>
+                        <div class="col-md-8">
+                            <div class="d-flex gap-2 flex-wrap justify-content-md-end">
+                                <div class="input-group input-group-sm" style="max-width: 260px;">
+                                    <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
+                                    <input type="text" id="auditFilterInput" class="form-control" placeholder="Search keyword, email, details..." onkeyup="filterAuditLogs()">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="clearAuditSearch()" title="Clear"><i class="bi bi-x-lg"></i></button>
+                                </div>
+                                <select id="auditActionCategorySelect" class="form-select form-select-sm w-auto" onchange="filterAuditLogs()">
+                                    <option value="ALL">All Event Categories</option>
+                                    <option value="ALLOCATION">Allocations & Beds</option>
+                                    <option value="PENALTY">Penalties & Fines</option>
+                                    <option value="COMPLAINT">Complaints</option>
+                                    <option value="VISITOR">Visitor Passes</option>
+                                    <option value="FEE">Fees & Payments</option>
+                                    <option value="STUDENT">Student Registrations & Approvals</option>
+                                    <option value="LOGIN">Auth & Logins</option>
+                                    <option value="CRON">Maintenance & System</option>
+                                </select>
+                                <select id="auditDateFilterSelect" class="form-select form-select-sm w-auto" onchange="filterAuditLogs()">
+                                    <option value="ALL">All Time</option>
+                                    <option value="TODAY">Today</option>
+                                    <option value="WEEK">Last 7 Days</option>
+                                    <option value="MONTH">Last 30 Days</option>
+                                </select>
+                                <button class="btn btn-sm btn-outline-secondary" type="button" onclick="resetAuditFilters()" title="Reset Filters"><i class="bi bi-arrow-counterclockwise"></i></button>
+                            </div>
+                        </div>
                     </div>
                     <div class="table-responsive">
                         <table class="table table-sm table-hover align-middle mb-0">
@@ -563,6 +610,24 @@
     </div>
 
     <!-- Modals -->
+    <!-- Admin Student Profile & History Modal -->
+    <div class="modal fade" id="adminStudentProfileModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-person-badge me-2"></i>Student Profile & Academic Record</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="adminStudentProfileModalBody">
+                    <div class="text-center py-4"><span class="spinner-border spinner-border-sm me-2"></span>Loading profile...</div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- System Alerts Overview Modal (Triggered by Bell Icon) -->
     <div class="modal fade" id="adminAlertsModal" tabindex="-1">
         <div class="modal-dialog">
@@ -1061,14 +1126,38 @@
             if (tabBtn) bootstrap.Tab.getOrCreateInstance(tabBtn).show();
         }
 
+        let allStudentsCache = [];
+
         async function loadStudentsTable() {
             const res = await fetch('/api/admin/students');
-            const students = await res.json();
+            allStudentsCache = await res.json();
+            filterStudentsTable();
+        }
+
+        function renderStudentsTable(students) {
             const tbody = document.getElementById('studentsTableBody');
-            tbody.innerHTML = students.map(s => `
+            const q = (document.getElementById('studentSearchInput')?.value || '').trim().toLowerCase();
+            
+            document.getElementById('studentsCountDisplay').textContent = `Showing ${students.length} of ${allStudentsCache.length} students`;
+            
+            if (students.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-muted"><i class="bi bi-search me-1"></i> No students matching "${q || 'filters'}" found.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = students.map(s => {
+                const isRollMatch = q && s.enrollment_no && s.enrollment_no.toLowerCase().includes(q);
+                const rollBadgeClass = isRollMatch ? 'bg-warning text-dark border border-dark fw-bold' : 'bg-light text-dark border';
+                return `
                 <tr>
-                    <td><span class="badge bg-light text-dark border font-monospace">${s.enrollment_no}</span></td>
-                    <td class="fw-semibold">${s.full_name}</td>
+                    <td>
+                        <span class="badge ${rollBadgeClass} font-monospace">${s.enrollment_no}</span>
+                    </td>
+                    <td class="fw-semibold">
+                        <a href="javascript:void(0)" onclick="viewStudentProfile(${s.student_id})" class="text-decoration-none text-dark">
+                            ${s.full_name} <i class="bi bi-box-arrow-up-right text-muted small ms-1"></i>
+                        </a>
+                    </td>
                     <td><span class="badge ${s.gender === 'Female' ? 'bg-danger-subtle text-danger' : 'bg-primary-subtle text-primary'}">${s.gender}</span></td>
                     <td>${s.department} (Yr ${s.year_of_study})</td>
                     <td>${s.mobile}</td>
@@ -1081,14 +1170,172 @@
                         </span>
                     </td>
                     <td>
-                        ${s.account_status === 'pending' ? `
-                            <button class="btn btn-sm btn-success py-0 px-2" onclick="approveStudent(${s.student_id})">
-                                <i class="bi bi-check-lg"></i> Approve
+                        <div class="d-flex gap-1">
+                            <button class="btn btn-sm btn-outline-primary py-0 px-2" onclick="viewStudentProfile(${s.student_id})" title="View Complete Profile">
+                                <i class="bi bi-eye"></i> Details
                             </button>
-                        ` : '<span class="text-muted small">Approved</span>'}
+                            ${s.account_status === 'pending' ? `
+                                <button class="btn btn-sm btn-success py-0 px-2" onclick="approveStudent(${s.student_id})">
+                                    <i class="bi bi-check-lg"></i> Approve
+                                </button>
+                            ` : ''}
+                        </div>
                     </td>
                 </tr>
-            `).join('');
+            `}).join('');
+        }
+
+        function filterStudentsTable() {
+            const q = (document.getElementById('studentSearchInput')?.value || '').trim().toLowerCase();
+            const statusFilter = document.getElementById('studentStatusFilterSelect')?.value || 'ALL';
+
+            const filtered = allStudentsCache.filter(s => {
+                const matchQ = !q || 
+                    (s.enrollment_no && s.enrollment_no.toLowerCase().includes(q)) ||
+                    (s.full_name && s.full_name.toLowerCase().includes(q)) ||
+                    (s.department && s.department.toLowerCase().includes(q)) ||
+                    (s.email && s.email.toLowerCase().includes(q)) ||
+                    (s.mobile && s.mobile.toLowerCase().includes(q));
+
+                if (!matchQ) return false;
+
+                if (statusFilter === 'pending') return s.account_status === 'pending';
+                if (statusFilter === 'active') return s.account_status === 'active';
+                if (statusFilter === 'allocated') return Boolean(s.bed_no);
+                if (statusFilter === 'unallocated') return !s.bed_no;
+
+                return true;
+            });
+
+            renderStudentsTable(filtered);
+        }
+
+        function clearStudentSearch() {
+            document.getElementById('studentSearchInput').value = '';
+            document.getElementById('studentStatusFilterSelect').value = 'ALL';
+            filterStudentsTable();
+        }
+
+        async function viewStudentProfile(studentId) {
+            const modalEl = document.getElementById('adminStudentProfileModal');
+            const modal = new bootstrap.Modal(modalEl);
+            const body = document.getElementById('adminStudentProfileModalBody');
+            body.innerHTML = '<div class="text-center py-4"><span class="spinner-border spinner-border-sm me-2"></span>Loading profile...</div>';
+            modal.show();
+
+            try {
+                const res = await fetch(`/api/admin/students/${studentId}/details`);
+                if (!res.ok) throw new Error('Failed to load profile');
+                const data = await res.json();
+                const s = data.student;
+                const alloc = data.activeAllocation;
+                const totalUnpaidPenalties = (data.penalties || []).filter(p => p.status === 'Unpaid').reduce((acc, p) => acc + p.amount, 0);
+                const totalUnpaidFees = (data.fees || []).filter(f => f.status === 'Unpaid' || f.status === 'Overdue').reduce((acc, f) => acc + f.amount, 0);
+
+                body.innerHTML = `
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="card p-3 border shadow-sm h-100">
+                                <div class="d-flex align-items-center mb-3">
+                                    <div class="avatar bg-primary text-white rounded-circle p-3 me-3 fw-bold fs-5 text-center" style="width: 50px; height: 50px; line-height: 25px;">
+                                        ${s.full_name.charAt(0)}
+                                    </div>
+                                    <div>
+                                        <h5 class="fw-bold mb-0">${s.full_name}</h5>
+                                        <span class="badge bg-warning text-dark border font-monospace me-1">${s.enrollment_no}</span>
+                                        <span class="badge ${s.gender === 'Female' ? 'bg-danger-subtle text-danger' : 'bg-primary-subtle text-primary'}">${s.gender}</span>
+                                    </div>
+                                </div>
+                                <ul class="list-group list-group-flush small">
+                                    <li class="list-group-item d-flex justify-content-between px-0">
+                                        <span class="text-muted">Department:</span>
+                                        <span class="fw-semibold">${s.department} (Year ${s.year_of_study})</span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between px-0">
+                                        <span class="text-muted">Email:</span>
+                                        <span class="font-monospace">${s.email}</span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between px-0">
+                                        <span class="text-muted">Mobile:</span>
+                                        <span>${s.mobile}</span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between px-0">
+                                        <span class="text-muted">Account Status:</span>
+                                        <span class="badge ${s.account_status === 'active' ? 'bg-success' : 'bg-warning text-dark'}">${s.account_status}</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="card p-3 border shadow-sm h-100">
+                                <h6 class="fw-bold mb-2 text-primary"><i class="bi bi-door-open me-1"></i> Room & Bed Allocation</h6>
+                                ${alloc ? `
+                                    <div class="p-2 bg-light rounded border mb-2 small">
+                                        <div class="fw-bold text-dark">${alloc.hostel_name}</div>
+                                        <div>Room ${alloc.room_no} — Bed <span class="badge bg-primary">${alloc.bed_no}</span></div>
+                                        <div class="text-muted">Allocated on: ${new Date(alloc.start_date).toLocaleDateString()}</div>
+                                    </div>
+                                ` : `
+                                    <div class="alert alert-warning py-2 small mb-2"><i class="bi bi-info-circle me-1"></i> No active room allocation assigned yet.</div>
+                                `}
+
+                                <h6 class="fw-bold mb-2 mt-2 text-dark"><i class="bi bi-cash-stack me-1"></i> Financials & Dues</h6>
+                                <div class="d-flex justify-content-between small p-2 border rounded bg-white mb-1">
+                                    <span>Pending Term Fees:</span>
+                                    <span class="fw-bold ${totalUnpaidFees > 0 ? 'text-danger' : 'text-success'}">₹${totalUnpaidFees}</span>
+                                </div>
+                                <div class="d-flex justify-content-between small p-2 border rounded bg-white">
+                                    <span>Unpaid Penalties/Fines:</span>
+                                    <span class="fw-bold ${totalUnpaidPenalties > 0 ? 'text-danger' : 'text-success'}">₹${totalUnpaidPenalties}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-12">
+                            <div class="card p-3 border shadow-sm">
+                                <h6 class="fw-bold mb-2"><i class="bi bi-clock-history me-1"></i> Recent Disciplinary & Maintenance History</h6>
+                                <div class="row g-2">
+                                    <div class="col-md-6">
+                                        <div class="small fw-semibold text-muted mb-1">Penalties (${(data.penalties || []).length}):</div>
+                                        ${(!data.penalties || data.penalties.length === 0) ? '<div class="small text-muted py-1">No penalties on record.</div>' : `
+                                            <div class="list-group list-group-flush small" style="max-height: 140px; overflow-y: auto;">
+                                                ${data.penalties.map(p => `
+                                                    <div class="list-group-item px-0 py-1 d-flex justify-content-between">
+                                                        <div>
+                                                            <span class="fw-semibold">${p.title}</span> (₹${p.amount})
+                                                            <div class="text-muted" style="font-size: 0.75rem;">${p.category}</div>
+                                                        </div>
+                                                        <span class="badge ${p.status === 'Paid' ? 'bg-success' : (p.status === 'Waived' ? 'bg-secondary' : 'bg-danger')}">${p.status}</span>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        `}
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="small fw-semibold text-muted mb-1">Complaints (${(data.complaints || []).length}):</div>
+                                        ${(!data.complaints || data.complaints.length === 0) ? '<div class="small text-muted py-1">No complaints filed.</div>' : `
+                                            <div class="list-group list-group-flush small" style="max-height: 140px; overflow-y: auto;">
+                                                ${data.complaints.map(c => `
+                                                    <div class="list-group-item px-0 py-1 d-flex justify-content-between">
+                                                        <div>
+                                                            <span class="fw-semibold">${c.category}</span>
+                                                            <div class="text-muted text-truncate" style="font-size: 0.75rem; max-width: 180px;">${c.description}</div>
+                                                        </div>
+                                                        <span class="badge ${c.status === 'Resolved' ? 'bg-success' : 'bg-warning text-dark'}">${c.status}</span>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        `}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } catch (err) {
+                body.innerHTML = `<div class="alert alert-danger">Error loading student profile: ${err.message}</div>`;
+            }
         }
 
         async function approveStudent(studentId) {
@@ -1096,18 +1343,10 @@
             if (res.ok) {
                 showToast('Student account approved successfully!');
                 loadStudentsTable();
-                loadDashboardKPIs();
+                loadDashboard();
                 loadEligibleStudents();
                 loadAuditLogs();
             }
-        }
-
-        function filterStudentsTable() {
-            const query = document.getElementById('studentSearchInput').value.toLowerCase();
-            const rows = document.querySelectorAll('#studentsTableBody tr');
-            rows.forEach(r => {
-                r.style.display = r.textContent.toLowerCase().includes(query) ? '' : 'none';
-            });
         }
 
         async function loadHostelsAndRooms() {
@@ -1810,37 +2049,107 @@ Sarojini Girls Hostel,203,2,Single,1`;
             }
         });
 
-        // 8. Audit Logs Feed with Client-Side Filter
+        // 8. Audit Logs Feed with Multi-Criteria Filter & Search
         async function loadAuditLogs() {
             const res = await fetch('/api/admin/audit-logs');
             allAuditLogsCache = await res.json();
-            renderAuditLogs(allAuditLogsCache);
+            filterAuditLogs();
+        }
+
+        function getActionBadge(action) {
+            if (!action) return '<span class="badge bg-secondary">EVENT</span>';
+            const act = action.toUpperCase();
+            if (act.includes('ALLOCATION') || act.includes('ROOM') || act.includes('BED')) {
+                return `<span class="badge bg-primary-subtle text-primary border border-primary-subtle">${action}</span>`;
+            }
+            if (act.includes('PENALTY')) {
+                return `<span class="badge bg-danger-subtle text-danger border border-danger-subtle">${action}</span>`;
+            }
+            if (act.includes('COMPLAINT')) {
+                return `<span class="badge bg-warning-subtle text-dark border border-warning-subtle">${action}</span>`;
+            }
+            if (act.includes('VISITOR')) {
+                return `<span class="badge bg-info-subtle text-info border border-info-subtle">${action}</span>`;
+            }
+            if (act.includes('FEE') || act.includes('PAYMENT')) {
+                return `<span class="badge bg-success-subtle text-success border border-success-subtle">${action}</span>`;
+            }
+            if (act.includes('STUDENT') || act.includes('APPROVAL')) {
+                return `<span class="badge bg-dark-subtle text-dark border">${action}</span>`;
+            }
+            if (act.includes('CRON') || act.includes('SYSTEM') || act.includes('LOCKOUT')) {
+                return `<span class="badge bg-secondary-subtle text-dark border">${action}</span>`;
+            }
+            return `<span class="badge bg-light text-dark border">${action}</span>`;
         }
 
         function renderAuditLogs(logs) {
             const tbody = document.getElementById('auditTableBody');
+            document.getElementById('auditCountDisplay').textContent = `Showing ${logs.length} of ${allAuditLogsCache.length} log events`;
+
             if (logs.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-muted">No activity records logged.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-muted"><i class="bi bi-search me-1"></i> No activity logs matching the selected filters.</td></tr>';
                 return;
             }
             tbody.innerHTML = logs.map(l => `
                 <tr>
                     <td class="small text-muted font-monospace">${new Date(l.created_at).toLocaleString()}</td>
                     <td><span class="badge bg-light text-dark border">${l.user_email || 'System'}</span></td>
-                    <td><span class="badge bg-primary-subtle text-primary">${l.action}</span></td>
+                    <td>${getActionBadge(l.action)}</td>
                     <td class="small">${l.details}</td>
                 </tr>
             `).join('');
         }
 
         function filterAuditLogs() {
-            const q = document.getElementById('auditFilterInput').value.toLowerCase();
-            const filtered = allAuditLogsCache.filter(l => 
-                (l.action && l.action.toLowerCase().includes(q)) ||
-                (l.details && l.details.toLowerCase().includes(q)) ||
-                (l.user_email && l.user_email.toLowerCase().includes(q))
-            );
+            const q = (document.getElementById('auditFilterInput')?.value || '').trim().toLowerCase();
+            const category = document.getElementById('auditActionCategorySelect')?.value || 'ALL';
+            const dateFilter = document.getElementById('auditDateFilterSelect')?.value || 'ALL';
+
+            const now = new Date();
+            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+            const sevenDaysAgo = todayStart - 7 * 86400000;
+            const thirtyDaysAgo = todayStart - 30 * 86400000;
+
+            const filtered = allAuditLogsCache.filter(l => {
+                // Keyword search
+                if (q) {
+                    const matchQ = (l.action && l.action.toLowerCase().includes(q)) ||
+                                   (l.details && l.details.toLowerCase().includes(q)) ||
+                                   (l.user_email && l.user_email.toLowerCase().includes(q));
+                    if (!matchQ) return false;
+                }
+
+                // Category filter
+                if (category !== 'ALL') {
+                    const act = (l.action || '').toUpperCase();
+                    if (!act.includes(category)) return false;
+                }
+
+                // Date filter
+                if (dateFilter !== 'ALL' && l.created_at) {
+                    const logTime = new Date(l.created_at).getTime();
+                    if (dateFilter === 'TODAY' && logTime < todayStart) return false;
+                    if (dateFilter === 'WEEK' && logTime < sevenDaysAgo) return false;
+                    if (dateFilter === 'MONTH' && logTime < thirtyDaysAgo) return false;
+                }
+
+                return true;
+            });
+
             renderAuditLogs(filtered);
+        }
+
+        function clearAuditSearch() {
+            document.getElementById('auditFilterInput').value = '';
+            filterAuditLogs();
+        }
+
+        function resetAuditFilters() {
+            document.getElementById('auditFilterInput').value = '';
+            document.getElementById('auditActionCategorySelect').value = 'ALL';
+            document.getElementById('auditDateFilterSelect').value = 'ALL';
+            filterAuditLogs();
         }
 
         async function runMaintenanceDaemon() {

@@ -117,6 +117,12 @@
         <div class="card border-0 shadow-sm p-3">
             <ul class="nav nav-pills mb-4 flex-wrap gap-2" role="tablist">
                 <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tabWardenResidents">
+                        <i class="bi bi-people me-1"></i> Residents & Students
+                        <span class="badge bg-primary rounded-pill ms-1" id="badgeWardenResidents">0</span>
+                    </button>
+                </li>
+                <li class="nav-item">
                     <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tabComplaints">
                         <i class="bi bi-tools me-1"></i> Complaints Queue 
                         <span class="badge bg-danger rounded-pill ms-1" id="badgeWardenComplaints">0</span>
@@ -155,6 +161,48 @@
 
             <div class="tab-content">
                 
+                <!-- 0. RESIDENTS & STUDENTS DIRECTORY TAB -->
+                <div class="tab-pane fade" id="tabWardenResidents">
+                    <div class="row align-items-center mb-3 g-2">
+                        <div class="col-md-4">
+                            <h5 class="fw-bold mb-0"><i class="bi bi-people me-2"></i>Hostel Residents Directory</h5>
+                            <small class="text-muted" id="wardenResidentCountDisplay">Loading residents...</small>
+                        </div>
+                        <div class="col-md-8">
+                            <div class="d-flex gap-2 flex-wrap justify-content-md-end">
+                                <div class="input-group input-group-sm" style="max-width: 320px;">
+                                    <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
+                                    <input type="text" id="wardenResidentSearchInput" class="form-control" placeholder="Search Enrollment No, Name, Room..." onkeyup="filterResidentsTable()">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="clearResidentSearch()" title="Clear"><i class="bi bi-x-lg"></i></button>
+                                </div>
+                                <select id="wardenResidentFloorSelect" class="form-select form-select-sm w-auto" onchange="filterResidentsTable()">
+                                    <option value="ALL">All Floors</option>
+                                    <option value="1">Floor 1</option>
+                                    <option value="2">Floor 2</option>
+                                    <option value="3">Floor 3</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Roll / Enrollment</th>
+                                    <th>Resident Name</th>
+                                    <th>Room & Bed</th>
+                                    <th>Department</th>
+                                    <th>Mobile</th>
+                                    <th>Quick Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="wardenResidentsTableBody">
+                                <tr><td colspan="6" class="text-center py-4 text-muted">Loading residents...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <!-- 1. COMPLAINTS TAB -->
                 <div class="tab-pane fade show active" id="tabComplaints">
                     <div class="d-flex justify-content-between align-items-center mb-3">
@@ -262,9 +310,37 @@
                     </div>
                 </div>
 
-                <!-- 5. HOSTEL ACTIVITY LOG TAB (NEW) -->
+                <!-- 5. HOSTEL ACTIVITY LOG TAB -->
                 <div class="tab-pane fade" id="tabWardenActivity">
-                    <h5 class="fw-bold mb-3"><i class="bi bi-journal-text me-2"></i>Hostel Incident & Activity Feed</h5>
+                    <div class="row align-items-center mb-3 g-2">
+                        <div class="col-md-4">
+                            <h5 class="fw-bold mb-0"><i class="bi bi-journal-text me-2"></i>Hostel Incident & Activity Feed</h5>
+                            <small class="text-muted" id="wardenActivityCountDisplay">Showing hostel activity</small>
+                        </div>
+                        <div class="col-md-8">
+                            <div class="d-flex gap-2 flex-wrap justify-content-md-end">
+                                <div class="input-group input-group-sm" style="max-width: 250px;">
+                                    <span class="input-group-text bg-white"><i class="bi bi-search text-muted"></i></span>
+                                    <input type="text" id="wardenActivitySearchInput" class="form-control" placeholder="Search roll, action, details..." onkeyup="filterWardenActivityLogs()">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="clearWardenActivitySearch()" title="Clear"><i class="bi bi-x-lg"></i></button>
+                                </div>
+                                <select id="wardenActivityCategorySelect" class="form-select form-select-sm w-auto" onchange="filterWardenActivityLogs()">
+                                    <option value="ALL">All Event Types</option>
+                                    <option value="COMPLAINT">Complaints</option>
+                                    <option value="VISITOR">Visitors</option>
+                                    <option value="PENALTY">Penalties & Fines</option>
+                                    <option value="REQUEST">Transfer & Vacate</option>
+                                    <option value="NOTICE">Notices</option>
+                                </select>
+                                <select id="wardenActivityDateFilterSelect" class="form-select form-select-sm w-auto" onchange="filterWardenActivityLogs()">
+                                    <option value="ALL">All Time</option>
+                                    <option value="TODAY">Today</option>
+                                    <option value="WEEK">Last 7 Days</option>
+                                </select>
+                                <button class="btn btn-sm btn-outline-secondary" type="button" onclick="resetWardenActivityFilters()" title="Reset Filters"><i class="bi bi-arrow-counterclockwise"></i></button>
+                            </div>
+                        </div>
+                    </div>
                     <div class="table-responsive">
                         <table class="table table-sm table-hover align-middle mb-0">
                             <thead class="table-light">
@@ -320,6 +396,24 @@
     </div>
 
     <!-- Modals -->
+    <!-- Warden Resident Profile Modal -->
+    <div class="modal fade" id="wardenResidentProfileModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title fw-bold"><i class="bi bi-person-badge me-2"></i>Resident Profile & Hostel Record</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="wardenResidentProfileModalBody">
+                    <div class="text-center py-4"><span class="spinner-border spinner-border-sm me-2"></span>Loading profile...</div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Warden Alerts Modal -->
     <div class="modal fade" id="wardenAlertsModal" tabindex="-1">
         <div class="modal-dialog">
@@ -609,6 +703,7 @@
             }
 
             await loadDashboard();
+            await loadResidents();
             await loadComplaints();
             await loadWardenRequests();
             await loadVisitors();
@@ -639,6 +734,8 @@
 
             // Notification Badges on Every Tab & Nav Bell
             document.getElementById('navWardenAlertBadge').textContent = data.badges.totalAlerts || 0;
+            const resBadge = document.getElementById('badgeWardenResidents');
+            if (resBadge) resBadge.textContent = data.bedStats.occupied || 0;
             document.getElementById('badgeWardenComplaints').textContent = data.badges.openComplaints || 0;
             document.getElementById('badgeWardenRequests').textContent = data.badges.pendingRequests || 0;
             document.getElementById('badgeWardenVisitors').textContent = data.badges.activeVisitors || 0;
@@ -936,23 +1033,286 @@
             }
         });
 
-        // 5. Load Hostel Specific Activity Log Feed
+        // Residents & Students Management (Enrollment search, directory & quick actions)
+        let allResidentsCache = [];
+
+        async function loadResidents() {
+            try {
+                const res = await fetch('/api/warden/residents');
+                if (res.ok) {
+                    allResidentsCache = await res.json();
+                    filterResidentsTable();
+                }
+            } catch (err) {
+                console.error('Error loading residents:', err);
+            }
+        }
+
+        function renderResidentsTable(residents) {
+            const tbody = document.getElementById('wardenResidentsTableBody');
+            const q = (document.getElementById('wardenResidentSearchInput')?.value || '').trim().toLowerCase();
+            
+            document.getElementById('wardenResidentCountDisplay').textContent = `Showing ${residents.length} of ${allResidentsCache.length} residents`;
+            
+            if (residents.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-muted"><i class="bi bi-search me-1"></i> No residents matching "${q || 'filters'}" found.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = residents.map(r => {
+                const isRollMatch = q && r.enrollment_no && r.enrollment_no.toLowerCase().includes(q);
+                const rollBadgeClass = isRollMatch ? 'bg-warning text-dark border border-dark fw-bold' : 'bg-light text-dark border';
+                return `
+                    <tr>
+                        <td><span class="badge ${rollBadgeClass} font-monospace">${r.enrollment_no}</span></td>
+                        <td class="fw-semibold">
+                            <a href="javascript:void(0)" onclick="openResidentProfileModal(${r.student_id})" class="text-decoration-none text-dark">
+                                ${r.full_name} <i class="bi bi-box-arrow-up-right text-muted small ms-1"></i>
+                            </a>
+                        </td>
+                        <td>
+                            <span class="badge bg-primary-subtle text-primary border border-primary-subtle">Room ${r.room_no}</span>
+                            <span class="badge bg-secondary-subtle text-secondary border">Bed ${r.bed_no}</span>
+                        </td>
+                        <td>${r.department || '—'} ${r.year_of_study ? `(Yr ${r.year_of_study})` : ''}</td>
+                        <td>${r.mobile || '—'}</td>
+                        <td>
+                            <div class="d-flex gap-1">
+                                <button class="btn btn-sm btn-outline-info py-0 px-2" onclick="openResidentProfileModal(${r.student_id})" title="View Complete Record">
+                                    <i class="bi bi-eye"></i> Profile
+                                </button>
+                                <button class="btn btn-sm btn-outline-success py-0 px-2" onclick="quickLogVisitorForResident(${r.student_id})" title="Log Visitor for this Resident">
+                                    <i class="bi bi-person-plus"></i> Visitor
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger py-0 px-2" onclick="quickLevyPenaltyForResident(${r.student_id})" title="Levy Penalty / Fine">
+                                    <i class="bi bi-exclamation-triangle"></i> Fine
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function filterResidentsTable() {
+            const q = (document.getElementById('wardenResidentSearchInput')?.value || '').trim().toLowerCase();
+            const floor = document.getElementById('wardenResidentFloorSelect')?.value || 'ALL';
+
+            const filtered = allResidentsCache.filter(r => {
+                const matchQ = !q ||
+                    (r.enrollment_no && r.enrollment_no.toLowerCase().includes(q)) ||
+                    (r.full_name && r.full_name.toLowerCase().includes(q)) ||
+                    (r.room_no && String(r.room_no).toLowerCase().includes(q)) ||
+                    (r.bed_no && r.bed_no.toLowerCase().includes(q)) ||
+                    (r.department && r.department.toLowerCase().includes(q)) ||
+                    (r.mobile && r.mobile.toLowerCase().includes(q));
+
+                if (!matchQ) return false;
+
+                if (floor !== 'ALL' && r.floor && String(r.floor) !== String(floor)) {
+                    return false;
+                }
+
+                return true;
+            });
+
+            renderResidentsTable(filtered);
+        }
+
+        function clearResidentSearch() {
+            document.getElementById('wardenResidentSearchInput').value = '';
+            document.getElementById('wardenResidentFloorSelect').value = 'ALL';
+            filterResidentsTable();
+        }
+
+        function quickLogVisitorForResident(studentId) {
+            const select = document.getElementById('visStudentSelect');
+            if (select) select.value = studentId;
+            new bootstrap.Modal(document.getElementById('addVisitorModal')).show();
+        }
+
+        function quickLevyPenaltyForResident(studentId) {
+            openWardenLevyPenaltyModal();
+            const select = document.getElementById('wPenaltyStudentSelect');
+            if (select) select.value = studentId;
+        }
+
+        async function openResidentProfileModal(studentId) {
+            const modalEl = document.getElementById('wardenResidentProfileModal');
+            const modal = new bootstrap.Modal(modalEl);
+            const body = document.getElementById('wardenResidentProfileModalBody');
+            body.innerHTML = '<div class="text-center py-4"><span class="spinner-border spinner-border-sm me-2"></span>Loading resident profile...</div>';
+            modal.show();
+
+            try {
+                const res = await fetch(`/api/warden/residents/${studentId}/profile`);
+                if (!res.ok) throw new Error('Could not retrieve resident record.');
+                const data = await res.json();
+                const r = data.resident;
+
+                body.innerHTML = `
+                    <div class="row g-3">
+                        <div class="col-md-5">
+                            <div class="card p-3 border shadow-sm h-100">
+                                <div class="d-flex align-items-center mb-3">
+                                    <div class="avatar bg-dark text-white rounded-circle p-3 me-3 fw-bold fs-5 text-center" style="width: 50px; height: 50px; line-height: 25px;">
+                                        ${r.full_name.charAt(0)}
+                                    </div>
+                                    <div>
+                                        <h5 class="fw-bold mb-0">${r.full_name}</h5>
+                                        <span class="badge bg-warning text-dark border font-monospace me-1">${r.enrollment_no}</span>
+                                        <span class="badge ${r.gender === 'Female' ? 'bg-danger-subtle text-danger' : 'bg-primary-subtle text-primary'}">${r.gender}</span>
+                                    </div>
+                                </div>
+                                <ul class="list-group list-group-flush small">
+                                    <li class="list-group-item d-flex justify-content-between px-0">
+                                        <span class="text-muted">Hostel Room:</span>
+                                        <span class="fw-bold text-primary">Room ${r.room_no} (Bed ${r.bed_no})</span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between px-0">
+                                        <span class="text-muted">Department:</span>
+                                        <span>${r.department} (Yr ${r.year_of_study || 1})</span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between px-0">
+                                        <span class="text-muted">Email:</span>
+                                        <span class="font-monospace">${r.email}</span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between px-0">
+                                        <span class="text-muted">Mobile:</span>
+                                        <span>${r.mobile}</span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between px-0">
+                                        <span class="text-muted">Resident Since:</span>
+                                        <span>${new Date(r.start_date).toLocaleDateString()}</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="col-md-7">
+                            <div class="card p-3 border shadow-sm mb-3">
+                                <h6 class="fw-bold mb-2 text-danger"><i class="bi bi-exclamation-octagon me-1"></i> Penalties & Fines (${(data.penalties || []).length})</h6>
+                                ${(!data.penalties || data.penalties.length === 0) ? '<div class="small text-muted py-1">Clean record. No penalties issued.</div>' : `
+                                    <div class="list-group list-group-flush small" style="max-height: 120px; overflow-y: auto;">
+                                        ${data.penalties.map(p => `
+                                            <div class="list-group-item px-0 py-1 d-flex justify-content-between">
+                                                <div>
+                                                    <span class="fw-semibold">${p.title}</span> (₹${p.amount})
+                                                    <div class="text-muted" style="font-size: 0.75rem;">${p.category} • Due: ${p.due_date}</div>
+                                                </div>
+                                                <span class="badge ${p.status === 'Paid' ? 'bg-success' : (p.status === 'Waived' ? 'bg-secondary' : 'bg-danger')}">${p.status}</span>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                `}
+                            </div>
+
+                            <div class="card p-3 border shadow-sm">
+                                <h6 class="fw-bold mb-2 text-success"><i class="bi bi-person-lines-fill me-1"></i> Recent Visitors (${(data.visitors || []).length})</h6>
+                                ${(!data.visitors || data.visitors.length === 0) ? '<div class="small text-muted py-1">No visitors logged.</div>' : `
+                                    <div class="list-group list-group-flush small" style="max-height: 120px; overflow-y: auto;">
+                                        ${data.visitors.map(v => `
+                                            <div class="list-group-item px-0 py-1 d-flex justify-content-between">
+                                                <div>
+                                                    <span class="fw-semibold">${v.visitor_name}</span> (${v.relation})
+                                                    <div class="text-muted" style="font-size: 0.75rem;">In: ${new Date(v.in_time).toLocaleDateString()}</div>
+                                                </div>
+                                                <span class="badge ${v.out_time ? 'bg-secondary' : 'bg-success'}">${v.out_time ? 'Left' : 'Inside'}</span>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                `}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } catch (err) {
+                body.innerHTML = `<div class="alert alert-danger">Error: ${err.message}</div>`;
+            }
+        }
+
+        // 5. Load Hostel Specific Activity Log Feed (with Filter & Search)
+        let allWardenActivityCache = [];
+
         async function loadWardenActivityLogs() {
             const res = await fetch('/api/warden/activity-logs');
-            const logs = await res.json();
+            allWardenActivityCache = await res.json();
+            filterWardenActivityLogs();
+        }
+
+        function getWardenActionBadge(action) {
+            if (!action) return '<span class="badge bg-secondary">EVENT</span>';
+            const act = action.toUpperCase();
+            if (act.includes('PENALTY')) return `<span class="badge bg-danger-subtle text-danger border border-danger-subtle">${action}</span>`;
+            if (act.includes('COMPLAINT')) return `<span class="badge bg-warning-subtle text-dark border border-warning-subtle">${action}</span>`;
+            if (act.includes('VISITOR')) return `<span class="badge bg-info-subtle text-info border border-info-subtle">${action}</span>`;
+            if (act.includes('NOTICE')) return `<span class="badge bg-secondary-subtle text-dark border">${action}</span>`;
+            if (act.includes('REQUEST') || act.includes('ALLOCATION')) return `<span class="badge bg-primary-subtle text-primary border border-primary-subtle">${action}</span>`;
+            return `<span class="badge bg-light text-dark border">${action}</span>`;
+        }
+
+        function renderWardenActivityLogs(logs) {
             const tbody = document.getElementById('wardenActivityTableBody');
+            document.getElementById('wardenActivityCountDisplay').textContent = `Showing ${logs.length} of ${allWardenActivityCache.length} log events`;
+
             if (logs.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-muted">No hostel activity recorded yet.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-muted"><i class="bi bi-search me-1"></i> No activity logs matching the selected filters.</td></tr>';
                 return;
             }
             tbody.innerHTML = logs.map(l => `
                 <tr>
                     <td class="small text-muted font-monospace">${new Date(l.created_at).toLocaleString()}</td>
                     <td><span class="badge bg-light text-dark border">${l.user_email || 'System'}</span></td>
-                    <td><span class="badge bg-warning text-dark">${l.action}</span></td>
+                    <td>${getWardenActionBadge(l.action)}</td>
                     <td class="small">${l.details}</td>
                 </tr>
             `).join('');
+        }
+
+        function filterWardenActivityLogs() {
+            const q = (document.getElementById('wardenActivitySearchInput')?.value || '').trim().toLowerCase();
+            const category = document.getElementById('wardenActivityCategorySelect')?.value || 'ALL';
+            const dateFilter = document.getElementById('wardenActivityDateFilterSelect')?.value || 'ALL';
+
+            const now = new Date();
+            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+            const sevenDaysAgo = todayStart - 7 * 86400000;
+
+            const filtered = allWardenActivityCache.filter(l => {
+                if (q) {
+                    const matchQ = (l.action && l.action.toLowerCase().includes(q)) ||
+                                   (l.details && l.details.toLowerCase().includes(q)) ||
+                                   (l.user_email && l.user_email.toLowerCase().includes(q));
+                    if (!matchQ) return false;
+                }
+
+                if (category !== 'ALL') {
+                    const act = (l.action || '').toUpperCase();
+                    if (!act.includes(category)) return false;
+                }
+
+                if (dateFilter !== 'ALL' && l.created_at) {
+                    const logTime = new Date(l.created_at).getTime();
+                    if (dateFilter === 'TODAY' && logTime < todayStart) return false;
+                    if (dateFilter === 'WEEK' && logTime < sevenDaysAgo) return false;
+                }
+
+                return true;
+            });
+
+            renderWardenActivityLogs(filtered);
+        }
+
+        function clearWardenActivitySearch() {
+            document.getElementById('wardenActivitySearchInput').value = '';
+            filterWardenActivityLogs();
+        }
+
+        function resetWardenActivityFilters() {
+            document.getElementById('wardenActivitySearchInput').value = '';
+            document.getElementById('wardenActivityCategorySelect').value = 'ALL';
+            document.getElementById('wardenActivityDateFilterSelect').value = 'ALL';
+            filterWardenActivityLogs();
         }
 
         // Resident Penalties & Disciplinary Fines

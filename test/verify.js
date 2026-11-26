@@ -328,7 +328,37 @@ async function runTests() {
     assert.strictEqual(waivedPenalty.waived_by, admin.id, 'Waived by should record user id');
     console.log('✅ 19. Penalties & Fines Management verified (Levy, BR-06 vacating block, online payment, and waiver)');
 
-    console.log('\n🎉 ALL 19 VERIFICATION TESTS PASSED SUCCESSFULLY! 🚀');
+    // 20. Test Student Search by Enrollment No & Activity Log Filters
+    // 20a. Verify student search by enrollment number
+    const searchTarget = db.prepare('SELECT * FROM students WHERE enrollment_no = ?').get('2026CS101');
+    assert(searchTarget && searchTarget.full_name === 'Rahul Sharma', 'Student must be discoverable by enrollment_no');
+
+    // 20b. Verify student full details query (Admin scope)
+    const adminStudentDetails = db.prepare(`
+        SELECT s.*, u.email, u.status as account_status
+        FROM students s JOIN users u ON s.user_id = u.id WHERE s.id = ?
+    `).get(searchTarget.id);
+    assert(adminStudentDetails && adminStudentDetails.enrollment_no === '2026CS101', 'Admin student profile query must return full student profile');
+
+    // 20c. Verify resident details query (Warden scope)
+    const wardenResidentQuery = db.prepare(`
+        SELECT s.id, s.full_name, s.enrollment_no, r.room_no, b.bed_no
+        FROM allocations a
+        JOIN students s ON a.student_id = s.id
+        JOIN beds b ON a.bed_id = b.id
+        JOIN rooms r ON b.room_id = r.id
+        WHERE r.hostel_id = ? AND a.status = 'Active' AND s.enrollment_no = ?
+    `).get(boysHostel.id, '2026CS101');
+    assert(wardenResidentQuery && wardenResidentQuery.room_no, 'Warden resident lookup must return allocation details');
+
+    // 20d. Verify Audit Log filtering by category and keyword
+    const penaltyLogs = db.prepare("SELECT * FROM audit_logs WHERE action LIKE 'PENALTY%'").all();
+    const systemLogs = db.prepare("SELECT * FROM audit_logs WHERE action LIKE 'SYSTEM%' OR action LIKE 'CRON%'").all();
+    assert(Array.isArray(penaltyLogs) && Array.isArray(systemLogs), 'Audit log category queries must return arrays');
+
+    console.log('✅ 20. Student search by Enrollment No & Audit Log Filter queries verified');
+
+    console.log('\n🎉 ALL 20 VERIFICATION TESTS PASSED SUCCESSFULLY! 🚀');
 }
 
 runTests().catch(err => {
