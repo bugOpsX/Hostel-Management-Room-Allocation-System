@@ -179,7 +179,7 @@ async function seed() {
     // 10. Sample Penalties & Fines
     db.prepare(`
         INSERT INTO penalties (student_id, allocation_id, hostel_id, category, title, description, amount, due_date, status, imposed_by)
-        VALUES (?, ?, ?, 'Lost Key / Asset Damage', 'Room Key Replacement Fee', 'Duplicate key issuance for Room 101 wardrobe lock', 250, DATE('now', '+5 days'), 'Unpaid', ?)
+        VALUES (?, ?, ?, 'Lost Key Replacement', 'Room Key Replacement Fee', 'Duplicate key issuance for Room 101 wardrobe lock', 250, DATE('now', '+5 days'), 'Unpaid', ?)
     `).run(sRahul.studentId, allocRahul.lastInsertRowid, hostelBoys.lastInsertRowid, wardenBoys.lastInsertRowid);
 
     console.log('✅ Seed completed successfully!');

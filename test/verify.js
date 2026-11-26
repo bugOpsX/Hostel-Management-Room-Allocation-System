@@ -311,10 +311,11 @@ async function runTests() {
     assert.strictEqual(paidPenalty.transaction_ref, txnRef, 'Transaction ref should be set');
 
     // 19d. Test Waiver flow
+    const wardenUser = db.prepare("SELECT id FROM users WHERE email = 'warden.boys@hostel.com'").get();
     const waiverCandidate = db.prepare(`
         INSERT INTO penalties (student_id, allocation_id, hostel_id, category, title, description, amount, due_date, status, imposed_by)
-        VALUES (?, ?, ?, 'Late Return / Curfew', 'Late Entry into hostel', 'Curfew breached by 15 mins', 200, DATE('now', '+3 days'), 'Unpaid', ?)
-    `).run(regStudent.lastInsertRowid, allocRes.lastInsertRowid, boysHostel.id, wardenBoys.id);
+        VALUES (?, ?, ?, 'Late Return/Curfew', 'Late Entry into hostel', 'Curfew breached by 15 mins', 200, DATE('now', '+3 days'), 'Unpaid', ?)
+    `).run(regStudent.lastInsertRowid, allocRes.lastInsertRowid, boysHostel.id, wardenUser ? wardenUser.id : admin.id);
     
     db.prepare(`
         UPDATE penalties
