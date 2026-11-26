@@ -282,6 +282,39 @@
                     </div>
                 </div>
 
+                <!-- 6. HOSTEL RESIDENT PENALTIES TAB -->
+                <div class="tab-pane fade" id="tabWardenPenalties">
+                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                        <div>
+                            <h5 class="fw-bold mb-0"><i class="bi bi-exclamation-octagon text-danger me-2"></i>Resident Penalties & Disciplinary Fines</h5>
+                            <span class="text-muted small">Levy fines for property damages, late curfew return, sanitation issues, or lost keys</span>
+                        </div>
+                        <button class="btn btn-danger btn-sm" onclick="openWardenLevyPenaltyModal()">
+                            <i class="bi bi-plus-circle me-1"></i> Issue Fine / Penalty
+                        </button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Resident</th>
+                                    <th>Room / Bed</th>
+                                    <th>Category</th>
+                                    <th>Reason / Description</th>
+                                    <th>Amount</th>
+                                    <th>Due Date</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="wardenPenaltiesTableBody">
+                                <tr><td colspan="9" class="text-center py-3 text-muted">Loading resident penalties...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
             </div>
         </div>
     </div>
