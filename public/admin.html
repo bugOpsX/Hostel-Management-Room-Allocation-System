@@ -1600,6 +1600,160 @@ Sarojini Girls Hostel,203,2,Single,1`;
             }
         });
 
+        // Penalties & Ad-hoc Fees Logic
+        async function loadPenaltiesTable() {
+            try {
+                const res = await fetch('/api/admin/penalties');
+                const penalties = await res.json();
+                const tbody = document.getElementById('adminPenaltiesTableBody');
+                if (penalties.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-muted">No penalties or ad-hoc fines recorded.</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = penalties.map(p => `
+                    <tr>
+                        <td>#${p.id}</td>
+                        <td><strong>${p.student_name}</strong> <span class="small text-muted font-monospace">(${p.enrollment_no})</span></td>
+                        <td>${p.hostel_name ? p.hostel_name + ' - Room ' + p.room_no : '<span class="text-muted">Unallocated</span>'}</td>
+                        <td><span class="badge bg-danger-subtle text-danger border border-danger-subtle">${p.category}</span></td>
+                        <td>
+                            <div class="fw-semibold">${p.title}</div>
+                            ${p.description ? `<small class="text-muted">${p.description}</small>` : ''}
+                        </td>
+                        <td class="fw-bold text-danger">₹${p.amount}</td>
+                        <td class="small">${p.due_date}</td>
+                        <td>
+                            <span class="badge ${p.status === 'Paid' ? 'bg-success' : (p.status === 'Waived' ? 'bg-warning text-dark' : 'bg-danger')}">
+                                ${p.status}
+                            </span>
+                        </td>
+                        <td class="small text-muted">${p.imposed_by_email || 'Warden'}</td>
+                        <td>
+                            ${p.status === 'Unpaid' ? `
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-success py-0 px-2" onclick="openRecordPenaltyPayModal(${p.id}, '${p.title.replace(/'/g, "\\'")}', ${p.amount})">
+                                        Pay
+                                    </button>
+                                    <button class="btn btn-outline-warning text-dark py-0 px-2" onclick="openWaivePenaltyModal(${p.id}, '${p.title.replace(/'/g, "\\'")}', ${p.amount})">
+                                        Waive
+                                    </button>
+                                </div>
+                            ` : (p.status === 'Paid' ? `<span class="small text-success font-monospace">${p.transaction_ref || 'Paid'}</span>` : `<span class="small text-muted">Waived: ${p.waive_reason || ''}</span>`)}
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                console.error('Failed to load penalties:', err);
+            }
+        }
+
+        async function openLevyPenaltyModal() {
+            const res = await fetch('/api/admin/students');
+            if (res.ok) {
+                const students = await res.json();
+                document.getElementById('penStudentSelect').innerHTML = '<option value="">Select Student...</option>' + students.map(s => `
+                    <option value="${s.student_id}">${s.full_name} (${s.enrollment_no}) - ${s.hostel_name ? s.hostel_name + ' Room ' + s.room_no : 'No Bed'}</option>
+                `).join('');
+            }
+            const d = new Date();
+            d.setDate(d.getDate() + 7);
+            document.getElementById('penDueDate').value = d.toISOString().split('T')[0];
+            document.getElementById('penAmount').value = '';
+            document.getElementById('penTitle').value = '';
+            document.getElementById('penDesc').value = '';
+            new bootstrap.Modal(document.getElementById('levyPenaltyModal')).show();
+        }
+
+        document.getElementById('levyPenaltyForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = {
+                student_id: document.getElementById('penStudentSelect').value,
+                category: document.getElementById('penCategory').value,
+                title: document.getElementById('penTitle').value,
+                description: document.getElementById('penDesc').value,
+                amount: document.getElementById('penAmount').value,
+                due_date: document.getElementById('penDueDate').value
+            };
+            const res = await fetch('/api/admin/penalties', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (res.ok) {
+                bootstrap.Modal.getInstance(document.getElementById('levyPenaltyModal')).hide();
+                showToast(data.message);
+                loadPenaltiesTable();
+                loadDashboardKPIs();
+                loadAuditLogs();
+            } else {
+                showToast(data.error || 'Failed to levy penalty', 'error');
+            }
+        });
+
+        function openRecordPenaltyPayModal(id, title, amount) {
+            document.getElementById('modalPenaltyId').value = id;
+            document.getElementById('modalPenaltyTitle').textContent = `Record payment for fine #${id}: "${title}"`;
+            document.getElementById('modalPenAmount').value = amount;
+            document.getElementById('modalPenRef').value = `PEN-REC-${Date.now().toString().slice(-6)}`;
+            new bootstrap.Modal(document.getElementById('recordPenaltyPayModal')).show();
+        }
+
+        document.getElementById('recordPenaltyPayForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('modalPenaltyId').value;
+            const payload = {
+                amount: document.getElementById('modalPenAmount').value,
+                mode: document.getElementById('modalPenMode').value,
+                transaction_ref: document.getElementById('modalPenRef').value
+            };
+            const res = await fetch(`/api/admin/penalties/${id}/record-payment`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (res.ok) {
+                bootstrap.Modal.getInstance(document.getElementById('recordPenaltyPayModal')).hide();
+                showToast(data.message);
+                loadPenaltiesTable();
+                loadDashboardKPIs();
+                loadAuditLogs();
+            } else {
+                showToast(data.error || 'Failed to record penalty payment', 'error');
+            }
+        });
+
+        function openWaivePenaltyModal(id, title, amount) {
+            document.getElementById('modalWaiveId').value = id;
+            document.getElementById('modalWaiveTitle').textContent = `Waiving fine #${id}: "${title}" (₹${amount})`;
+            document.getElementById('modalWaiveReason').value = '';
+            new bootstrap.Modal(document.getElementById('waivePenaltyModal')).show();
+        }
+
+        document.getElementById('waivePenaltyForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('modalWaiveId').value;
+            const payload = {
+                reason: document.getElementById('modalWaiveReason').value
+            };
+            const res = await fetch(`/api/admin/penalties/${id}/waive`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (res.ok) {
+                bootstrap.Modal.getInstance(document.getElementById('waivePenaltyModal')).hide();
+                showToast(data.message);
+                loadPenaltiesTable();
+                loadDashboardKPIs();
+                loadAuditLogs();
+            } else {
+                showToast(data.error || 'Failed to waive penalty', 'error');
+            }
+        });
+
         async function loadNotices() {
             const res = await fetch('/api/notices');
             const notices = await res.json();
